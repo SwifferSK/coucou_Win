@@ -62,6 +62,7 @@ pub fn set_paused(on: bool) {
 
 /// Spawns every poller with the macOS delays and intervals.
 pub fn start(app: AppHandle) {
+    spawn(app.clone(), "integration_spotify", 1, 2, poll_spotify);
     spawn(app.clone(), "integration_n8n", 3, 15, poll_n8n);
     spawn(app.clone(), "integration_vercel", 5, 30, poll_vercel);
     spawn(app.clone(), "integration_stripe", 6, 30, poll_stripe);
@@ -763,3 +764,29 @@ fn fmt_value(v: &Value) -> String {
         other => other.to_string(),
     }
 }
+
+// ── Spotify ───────────────────────────────────────────────────────────────────
+
+async fn poll_spotify(app: AppHandle) {
+    let track = crate::platform::get_spotify_track();
+    let is_running = track.as_ref().map(|t| t.running).unwrap_or(false);
+    let is_playing = track.as_ref().map(|t| t.playing).unwrap_or(false);
+    let title = track.as_ref().map(|t| t.title.clone()).unwrap_or_default();
+    let artist = track.as_ref().map(|t| t.artist.clone()).unwrap_or_default();
+
+    emit(
+        &app,
+        IntegrationUpdate {
+            id: "integration_spotify",
+            data: json!({
+                "running": is_running,
+                "playing": is_playing,
+                "title": title,
+                "artist": artist,
+            }),
+            error: None,
+            event: None,
+        },
+    );
+}
+

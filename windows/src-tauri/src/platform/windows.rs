@@ -4,6 +4,7 @@ use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
+use serde::Serialize;
 use tauri::{AppHandle, Manager, WebviewWindow};
 
 use ::windows::core::{BOOL, PWSTR};
@@ -12,7 +13,9 @@ use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use ::windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
 use ::windows::Win32::System::Ole::RevokeDragDrop;
 use ::windows::Win32::System::SystemInformation::GetLocalTime;
-use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use ::windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
 use ::windows::Win32::UI::WindowsAndMessaging::{
     EnumChildWindows, GetClassNameW, GetCursorPos, GetWindowLongPtrW, SetWindowLongPtrW,
@@ -233,3 +236,105 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
+
+// ── Spotify & Media Controls ──────────────────────────────────────────────────
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SpotifyTrackInfo {
+    pub running: bool,
+    pub playing: bool,
+    pub title: String,
+    pub artist: String,
+    pub raw: String,
+}
+
+pub fn get_spotify_track() -> Option<SpotifyTrackInfo> {
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, GetWindowThreadProcessId};
+
+    struct State {
+        info: Option<SpotifyTrackInfo>,
+    }
+
+    let mut state = State { info: None };
+
+    unsafe extern "system" fn enum_win(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = &mut *(lparam.0 as *mut State);
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return true.into();
+        }
+
+        if let Ok(proc) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            let mut name_buf = [0u16; 260];
+            let mut size = name_buf.len() as u32;
+            if windows::Win32::System::Threading::QueryFullProcessImageNameW(
+                proc,
+                windows::Win32::System::Threading::PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(name_buf.as_mut_ptr()),
+                &mut size,
+            ).is_ok() {
+                let full_path = String::from_utf16_lossy(&name_buf[..size as usize]);
+                if full_path.to_lowercase().ends_with("spotify.exe") {
+                    let mut title_buf = [0u16; 512];
+                    let len = GetWindowTextW(hwnd, &mut title_buf);
+                    if len > 0 {
+                        let text = String::from_utf16_lossy(&title_buf[..len as usize]);
+                        if !text.is_empty() && text != "AngleHiddenWindow" && text != "MSCTFIME UI" && text != "Default IME" {
+                            let (artist, title, playing) = if text.contains(" - ") {
+                                let mut parts = text.splitn(2, " - ");
+                                let a = parts.next().unwrap_or("").trim().to_string();
+                                let t = parts.next().unwrap_or("").trim().to_string();
+                                (a, t, true)
+                            } else {
+                                (String::new(), text.clone(), false)
+                            };
+
+                            let is_better = match &state.info {
+                                None => true,
+                                Some(existing) => !existing.playing && playing,
+                            };
+
+                            if is_better {
+                                state.info = Some(SpotifyTrackInfo {
+                                    running: true,
+                                    playing,
+                                    title,
+                                    artist,
+                                    raw: text,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            let _ = CloseHandle(proc);
+        }
+        true.into()
+    }
+
+    unsafe {
+        let _ = EnumWindows(Some(enum_win), LPARAM(&mut state as *mut _ as isize));
+    }
+
+    state.info
+}
+
+pub fn media_control(action: &str) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        keybd_event, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
+        VK_MEDIA_PREV_TRACK,
+    };
+    let vk = match action {
+        "play_pause" | "toggle" => VK_MEDIA_PLAY_PAUSE,
+        "next" => VK_MEDIA_NEXT_TRACK,
+        "prev" | "previous" => VK_MEDIA_PREV_TRACK,
+        _ => return,
+    };
+    unsafe {
+        keybd_event(vk.0 as u8, 0, KEYBD_EVENT_FLAGS(0), 0);
+        keybd_event(vk.0 as u8, 0, KEYEVENTF_KEYUP, 0);
+    }
+}
+

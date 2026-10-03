@@ -66,12 +66,32 @@ export const Bridge = {
   hooksStatus: () => call<HookStatus>("hooks_status"),
   /** Diff to show before anything is written. `install: false` previews removal. */
   hooksPreview: (install: boolean) => callOrThrow<HookPreview>("hooks_preview", { install }),
-  /**
-   * Writes ~/.claude/settings.json — only ever after an explicit click, and only
-   * when the file still matches the preview the user looked at.
-   */
   hooksApply: (install: boolean, fingerprint: string) =>
     callOrThrow<string>("hooks_apply", { install, fingerprint }),
+
+  // ── Antigravity hooks ─────────────────────────────────────────────────────
+  agyHooksStatus: () => call<HookStatus>("agy_hooks_status"),
+  agyHooksPreview: (install: boolean) => callOrThrow<HookPreview>("agy_hooks_preview", { install }),
+  agyHooksApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("agy_hooks_apply", { install, fingerprint }),
+
+  // ── Gemini CLI hooks ──────────────────────────────────────────────────────
+  geminiHooksStatus: () => call<HookStatus>("gemini_hooks_status"),
+  geminiHooksPreview: (install: boolean) => callOrThrow<HookPreview>("gemini_hooks_preview", { install }),
+  geminiHooksApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("gemini_hooks_apply", { install, fingerprint }),
+
+  // ── Codex hooks ───────────────────────────────────────────────────────────
+  codexHooksStatus: () => call<HookStatus>("codex_hooks_status"),
+  codexHooksPreview: (install: boolean) => callOrThrow<HookPreview>("codex_hooks_preview", { install }),
+  codexHooksApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("codex_hooks_apply", { install, fingerprint }),
+
+  // ── StatusLine relay ──────────────────────────────────────────────────────
+  statuslineStatus: () => call<HookStatus>("statusline_status"),
+  statuslinePreview: (install: boolean) => callOrThrow<HookPreview>("statusline_preview", { install }),
+  statuslineApply: (install: boolean, fingerprint: string) =>
+    callOrThrow<string>("statusline_apply", { install, fingerprint }),
 
   approvalDecision: (requestId: string, decision: "allow" | "deny") =>
     call<void>("approval_decision", { requestId, decision }),
@@ -99,6 +119,9 @@ export const Bridge = {
 
   /** Tray → Pause. Stops the integration pollers, not just the island. */
   setPaused: (paused: boolean) => call<void>("set_paused", { paused }),
+
+  /** Control playback (Spotify, Media): "play_pause", "next", "prev" */
+  mediaControl: (action: string) => call<void>("media_control", { action }),
 };
 
 export interface IntegrationUpdate {

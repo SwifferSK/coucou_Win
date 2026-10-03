@@ -5,7 +5,7 @@
 import { h, svg, clear, dot } from "./dom";
 import { ICONS } from "./icons";
 import { Ticker } from "./ticker";
-import { State, type AgentTask } from "../core/state";
+import { State, type AgentTask, WORKSPACE_PILL_IDS } from "../core/state";
 import { washRGBA, type IslandViewName, type Wash } from "../core/layout";
 import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
@@ -172,12 +172,11 @@ function buildOverview(actions: ViewActions): ViewHost {
         mode = null;
       }
 
-      // VS Code with a live Claude Code session keeps the ticker; every other
-      // pill shows its own card, exactly like IntegrationCardView.
-      const sessionActive =
-        task?.id === "integration_claude" && (task.state !== "idle" || task.steps.length > 0);
+      // Workspace tasks (VS Code, Antigravity, Cursor, Codex, Agents) show the live ticker;
+      // Service integrations show their own cards.
+      const isWorkspace = task && (!task.isIntegration || WORKSPACE_PILL_IDS.includes(task.id) || task.id.startsWith("agent_"));
 
-      if (task && sessionActive) {
+      if (task && isWorkspace) {
         if (mode !== "ticker") {
           clear(leftBody);
           leftBody.append(tickerBody);
@@ -185,10 +184,18 @@ function buildOverview(actions: ViewActions): ViewHost {
           cardKey = "";
         }
         clear(who);
+        let toolLabel = "Agent";
+        if (task.id === "integration_claude") toolLabel = "Claude Code";
+        else if (task.id === "agent_antigravity") toolLabel = "Antigravity";
+        else if (task.id === "agent_cursor") toolLabel = "Cursor";
+        else if (task.id === "agent_codex") toolLabel = "Codex";
+        else if (task.id === "agent_gemini") toolLabel = "Gemini CLI";
+        else if (task.source === "claudeCode") toolLabel = "Claude Code";
+
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: toolLabel }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {

@@ -50,28 +50,60 @@ export interface SearchResult {
   note?: string;
 }
 
-const task = (
-  id: string, name: string, color: string, source: AgentSource,
-): AgentTask => ({
-  id, name, color, state: "idle", stepIndex: 0, steps: [], source, isIntegration: true,
-});
+export type PillCategory = "workspace" | "agent" | "ai" | "service";
 
-/** AgentTask.integrationAgents — same ids, names and colours as macOS. */
-export const INTEGRATION_AGENTS: AgentTask[] = [
-  task("integration_claude", "VS Code", "#F5F6F8", "claudeCode"),
-  task("integration_resend", "Resend", "#22C55E", "n8n"),
-  task("integration_n8n", "n8n", "#F29B38", "n8n"),
-  task("integration_vercel", "Vercel", "#7C5CFF", "n8n"),
-  task("integration_github", "GitHub", "#F4505E", "n8n"),
-  task("integration_notion", "Notion", "#8C8C8C", "n8n"),
-  task("integration_calcom", "Cal.com", "#C9956A", "n8n"),
-  task("integration_stripe", "Stripe", "#0570DE", "n8n"),
+export interface PillDefinition {
+  id: string;
+  name: string;
+  color: string;
+  category: PillCategory;
+  subtitle: string;
+  source: AgentSource;
+}
+
+export const PILL_CATALOG: PillDefinition[] = [
+  // ── Where you code ────────────────────────────────────────────────────────
+  { id: "integration_claude", name: "VS Code", color: "#F5F6F8", category: "workspace", subtitle: "Integration", source: "claudeCode" },
+  { id: "agent_cursor", name: "Cursor", color: "#C0C4CC", category: "workspace", subtitle: "Integration", source: "agent" },
+  { id: "agent_antigravity", name: "Antigravity", color: "#E879F9", category: "workspace", subtitle: "Integration", source: "agent" },
+  { id: "agent_codex", name: "Codex", color: "#2DD4BF", category: "workspace", subtitle: "Integration", source: "agent" },
+  // ── Agents ────────────────────────────────────────────────────────────────
+  { id: "agent_gemini", name: "Gemini CLI", color: "#8AB4F8", category: "agent", subtitle: "Agent", source: "agent" },
+  // ── AI for the chat ───────────────────────────────────────────────────────
+  { id: "ai_anthropic", name: "Anthropic", color: "#E07950", category: "ai", subtitle: "Chat", source: "n8n" },
+  { id: "ai_google", name: "Google AI", color: "#4285F4", category: "ai", subtitle: "Chat", source: "n8n" },
+  { id: "ai_openai", name: "OpenAI", color: "#10A37F", category: "ai", subtitle: "Chat", source: "n8n" },
+  { id: "ai_ollama", name: "Ollama", color: "#FACC15", category: "ai", subtitle: "Chat", source: "n8n" },
+  { id: "ai_lmstudio", name: "LM Studio", color: "#A3E635", category: "ai", subtitle: "Chat", source: "n8n" },
+  // ── Services ──────────────────────────────────────────────────────────────
+  { id: "integration_resend", name: "Resend", color: "#22C55E", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_n8n", name: "n8n", color: "#F29B38", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_vercel", name: "Vercel", color: "#7C5CFF", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_github", name: "GitHub", color: "#F4505E", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_notion", name: "Notion", color: "#8C8C8C", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_calcom", name: "Cal.com", color: "#C9956A", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_stripe", name: "Stripe", color: "#0570DE", category: "service", subtitle: "Integration", source: "n8n" },
+  { id: "integration_spotify", name: "Spotify", color: "#1DB954", category: "service", subtitle: "Music", source: "n8n" },
 ];
 
-export const TOGGLEABLE_INTEGRATION_IDS = [
-  "integration_resend", "integration_n8n", "integration_vercel", "integration_github",
-  "integration_notion", "integration_calcom", "integration_stripe",
+export const WORKSPACE_PILL_IDS = [
+  "integration_claude", "agent_cursor", "agent_antigravity", "agent_codex",
 ];
+
+export const INTEGRATION_AGENTS: AgentTask[] = PILL_CATALOG.map((p) => ({
+  id: p.id,
+  name: p.name,
+  color: p.color,
+  state: "idle",
+  stepIndex: 0,
+  steps: [],
+  source: p.source,
+  isIntegration: p.category === "service" || p.category === "ai",
+}));
+
+export const TOGGLEABLE_INTEGRATION_IDS = PILL_CATALOG
+  .filter((p) => !WORKSPACE_PILL_IDS.includes(p.id))
+  .map((p) => p.id);
 
 /** What an integration poller last reported. */
 export interface IntegrationInfo {
@@ -90,8 +122,13 @@ export interface Settings {
   screen: "primary" | "cursor";
   autostart: boolean;
   hooksInstalled: boolean;
-  /** Claude model used by the chat. */
+  mainPillId: string;
+  chatProvider: string;
   model: string;
+  googleModel: string;
+  openaiModel: string;
+  ollamaUrl: string;
+  lmstudioUrl: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -105,7 +142,13 @@ export const DEFAULT_SETTINGS: Settings = {
   screen: "primary",
   autostart: false,
   hooksInstalled: false,
+  mainPillId: "integration_claude",
+  chatProvider: "anthropic",
   model: "claude-opus-5",
+  googleModel: "gemini-2.0-flash",
+  openaiModel: "gpt-4o",
+  ollamaUrl: "http://localhost:11434",
+  lmstudioUrl: "http://localhost:1234",
 };
 
 type Listener = () => void;
@@ -199,48 +242,50 @@ class AppState {
     this.notify();
   }
 
-  /** loadIntegrationTasks() — VS Code always on, the rest opt-in (max 4). */
+  /** loadIntegrationTasks() — Main workspace pill always on, plus active pills (max 4). */
   loadIntegrationTasks() {
+    const mainId = this.settings.mainPillId || "integration_claude";
     for (const proto of INTEGRATION_AGENTS) {
       const shouldLoad =
-        proto.id === "integration_claude" || this.settings.activeIntegrations.includes(proto.id);
+        proto.id === mainId || this.settings.activeIntegrations.includes(proto.id);
       const idx = this.tasks.findIndex((t) => t.id === proto.id);
       if (shouldLoad && idx < 0) this.tasks.push({ ...proto, steps: [] });
       if (!shouldLoad && idx >= 0) this.tasks.splice(idx, 1);
     }
-    // Order: integration_claude first, then agent_* pills (visible in slice(0,4)),
+    // Order: main pill first, then agent_* pills (visible in slice(0,4)),
     // then other integrations in declaration order.
     const order = INTEGRATION_AGENTS.map((t) => t.id);
     this.tasks.sort((a, b) => {
+      if (a.id === mainId) return -1;
+      if (b.id === mainId) return 1;
       const isAgentA = a.id.startsWith("agent_");
       const isAgentB = b.id.startsWith("agent_");
-      // integration_claude always first
-      if (a.id === "integration_claude") return -1;
-      if (b.id === "integration_claude") return 1;
-      // agent_* before other integrations; preserve insertion order among themselves
       if (isAgentA && !isAgentB) return -1;
       if (isAgentB && !isAgentA) return 1;
       if (isAgentA && isAgentB) return 0;
-      // both known integrations → declaration order
       return order.indexOf(a.id) - order.indexOf(b.id);
     });
-    if (!this.focusId) this.focusId = "integration_claude";
+    if (!this.focusId || !this.tasks.some((t) => t.id === this.focusId)) {
+      this.focusId = mainId;
+    }
     this.notify();
   }
 
   removeTask(id: string) {
+    const mainId = this.settings.mainPillId || "integration_claude";
     const idx = this.tasks.findIndex((t) => t.id === id);
     if (idx < 0) return;
     this.tasks.splice(idx, 1);
-    if (this.focusId === id) this.focusId = this.tasks[0]?.id ?? "integration_claude";
+    if (this.focusId === id) this.focusId = this.tasks[0]?.id ?? mainId;
     this.notify();
   }
 
   /** Creates a dynamic agent_ pill on first event; no-ops if it already exists.
-   *  Inserted right after integration_claude so it appears in the visible slice(0,4). */
+   *  Inserted right after the main pill so it appears in the visible slice(0,4). */
   upsertExternalAgent(id: string, name: string, color: string) {
     if (this.tasks.some((t) => t.id === id)) return;
-    const at = this.tasks.findIndex((t) => t.id === "integration_claude") + 1;
+    const mainId = this.settings.mainPillId || "integration_claude";
+    const at = Math.max(0, this.tasks.findIndex((t) => t.id === mainId) + 1);
     this.tasks.splice(at, 0, {
       id, name, color,
       state: "idle", stepIndex: 0, steps: [],
@@ -251,11 +296,12 @@ class AppState {
   }
 
   toggleIntegration(id: string) {
-    if (id === "integration_claude") return;
+    const mainId = this.settings.mainPillId || "integration_claude";
+    if (id === mainId || WORKSPACE_PILL_IDS.includes(id)) return;
     const active = this.settings.activeIntegrations;
     if (active.includes(id)) {
       this.settings.activeIntegrations = active.filter((x) => x !== id);
-      if (this.focusId === id) this.focusId = "integration_claude";
+      if (this.focusId === id) this.focusId = mainId;
     } else {
       if (active.length >= 4) return;
       this.settings.activeIntegrations = [...active, id];

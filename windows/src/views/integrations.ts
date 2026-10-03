@@ -381,8 +381,67 @@ export interface IntegrationCardHooks {
   openSettings(): void;
 }
 
+function spotifyCard(): HTMLElement {
+  const data = get("integration_spotify");
+  const isRunning = Boolean(data.running);
+  const isPlaying = Boolean(data.playing);
+  const title = (data.title as string) || (isPlaying ? "Playing music" : isRunning ? "Paused" : "Spotify Closed");
+  const artist = (data.artist as string) || (isRunning ? "Spotify" : "Open Spotify to play");
+
+  const eq = h(
+    "div",
+    { class: isPlaying ? "spotify-eq playing" : "spotify-eq", title: isPlaying ? "Playing" : "Paused" },
+    h("span", {}),
+    h("span", {}),
+    h("span", {}),
+    h("span", {}),
+  );
+
+  const head = header(
+    "#1DB954",
+    "Spotify",
+    isPlaying ? "Now Playing" : isRunning ? "Paused" : "Ready",
+    eq,
+  );
+
+  const prevBtn = h(
+    "button",
+    { class: "spotify-btn", title: "Previous Track", onclick: () => void Bridge.mediaControl("prev") },
+    svg(ICONS.prevTrack, 11),
+  );
+
+  const playBtn = h(
+    "button",
+    { class: "spotify-btn play-btn", title: isPlaying ? "Pause" : "Play", onclick: () => void Bridge.mediaControl("play_pause") },
+    svg(isPlaying ? ICONS.pause : ICONS.play, 13),
+  );
+
+  const nextBtn = h(
+    "button",
+    { class: "spotify-btn", title: "Next Track", onclick: () => void Bridge.mediaControl("next") },
+    svg(ICONS.nextTrack, 11),
+  );
+
+  const trackBox = h(
+    "div",
+    { class: "spotify-track-box" },
+    h("div", { class: "spotify-track-info" },
+      h("div", { class: "spotify-track-title", text: title }),
+      h("div", { class: "spotify-track-artist", text: artist }),
+    ),
+    h("div", { class: "spotify-controls" },
+      prevBtn,
+      playBtn,
+      nextBtn,
+    ),
+  );
+
+  return h("div", { class: "int-card spotify-card" }, head, trackBox);
+}
+
 /** True when this integration has data worth showing instead of the idle card. */
 export function hasIntegrationData(id: string): boolean {
+  if (id === "integration_spotify") return true;
   const info = State.integrations[id];
   if (!info || info.error) return false;
   switch (id) {
@@ -404,6 +463,9 @@ export function hasIntegrationData(id: string): boolean {
 }
 
 export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
+  if (task.id === "integration_spotify") {
+    return spotifyCard();
+  }
   if (task.id === "integration_n8n") {
     const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
     return hooks.detailOpen && hasActivity
@@ -432,3 +494,4 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
 }
 
 export { clear };
+

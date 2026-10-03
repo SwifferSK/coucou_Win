@@ -99,71 +99,17 @@ pub fn start(app: AppHandle) {
     });
 }
 
-#[cfg(target_os = "linux")]
-pub fn start(app: AppHandle) {
-    use std::os::unix::fs::PermissionsExt;
-    use tokio::net::UnixListener;
-
-    tauri::async_runtime::spawn(async move {
-        let Some(path) = crate::platform::relay_socket_path() else {
-            log::line("no private runtime directory ($XDG_RUNTIME_DIR) — Claude Code hooks are inactive");
-            return;
-        };
-        // A socket file left behind by a crash answers nothing and can go. One
-        // that answers belongs to a Coucou that is still running: like
-        // first_pipe_instance on Windows, we refuse to serve on top of it.
-        if path.exists() {
-            if std::os::unix::net::UnixStream::connect(&path).is_ok() {
-                log::line("another Coucou already serves the relay socket");
-                return;
-            }
-            let _ = std::fs::remove_file(&path);
-        }
-        let listener = match UnixListener::bind(&path) {
-            Ok(l) => l,
-            Err(err) => {
-                log::line(format!("cannot open the relay socket: {err}"));
-                return;
-            }
-        };
-        // The runtime directory is already 0700; this is belt and braces.
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        let uid = unsafe { libc::getuid() };
-        loop {
-            let stream = match listener.accept().await {
-                Ok((stream, _)) => stream,
-                Err(_) => {
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                    continue;
-                }
-            };
-            // Only the relay run by our own user may drive the island.
-            if !matches!(stream.peer_cred(), Ok(c) if c.uid() == uid) {
-                log::line("refused a relay connection from another user");
-                continue;
-            }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move { handle(app, stream).await });
-        }
-    });
-}
-
 /// One accepted relay connection, whatever carries it.
 trait Relay: AsyncRead + AsyncWrite + Unpin {
     /// Ends the conversation once everything has been written.
     fn finish(&mut self) {}
 }
 
-#[cfg(windows)]
 impl Relay for NamedPipeServer {
     fn finish(&mut self) {
         let _ = self.disconnect();
     }
 }
-
-/// Dropping the stream closes it; the relay reads up to our newline first.
-#[cfg(target_os = "linux")]
-impl Relay for tokio::net::UnixStream {}
 
 async fn handle(app: AppHandle, mut pipe: impl Relay) {
     let mut buf = Vec::new();

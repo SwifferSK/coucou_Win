@@ -33,23 +33,68 @@ body.settings-window {
 }
 
 #settings-root {
-  padding: 22px 24px 32px;
+  padding: 18px 24px 32px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   max-width: 720px;
   margin: 0 auto;
 }
 
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 h1 {
-  font: 600 17px var(--font);
+  font: 600 18px var(--font);
   letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 h1 .version {
   font: 400 12px var(--font);
   color: var(--dim-2);
-  margin-left: 8px;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  overflow-x: auto;
+}
+
+.tab-btn {
+  font: 500 12.5px var(--font);
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+}
+
+.tab-btn.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ink);
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 section {

@@ -177,6 +177,12 @@ fn set_paused(paused: bool) {
     integrations::set_paused(paused);
 }
 
+#[tauri::command]
+fn media_control(action: String) {
+    platform::media_control(&action);
+}
+
+
 // ── Claude Code hooks ─────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -198,8 +204,6 @@ fn hooks_apply(
     install: bool,
     fingerprint: String,
 ) -> Result<String, String> {
-    // The fingerprint comes from the preview the user actually looked at, so a
-    // settings.json that changed in between is refused rather than overwritten.
     let backup = hooks::write(install, &fingerprint)?;
     let updated = {
         let mut current = shared.settings.lock().unwrap();
@@ -210,6 +214,107 @@ fn hooks_apply(
     let _ = app.emit("settings-changed", updated);
     Ok(backup)
 }
+
+// ── Antigravity hooks ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn agy_hooks_status() -> HookStatus {
+    hooks::agy_status()
+}
+
+#[tauri::command]
+fn agy_hooks_preview(install: bool) -> Result<HookPreview, String> {
+    hooks::agy_preview(install)
+}
+
+#[tauri::command]
+fn agy_hooks_apply(
+    app: AppHandle,
+    shared: State<Shared>,
+    install: bool,
+    fingerprint: String,
+) -> Result<String, String> {
+    let backup = hooks::agy_write(install, &fingerprint)?;
+    let updated = shared.settings.lock().unwrap().clone();
+    let _ = app.emit("settings-changed", updated);
+    Ok(backup)
+}
+
+// ── Gemini CLI hooks ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn gemini_hooks_status() -> HookStatus {
+    hooks::gemini_status()
+}
+
+#[tauri::command]
+fn gemini_hooks_preview(install: bool) -> Result<HookPreview, String> {
+    hooks::gemini_preview(install)
+}
+
+#[tauri::command]
+fn gemini_hooks_apply(
+    app: AppHandle,
+    shared: State<Shared>,
+    install: bool,
+    fingerprint: String,
+) -> Result<String, String> {
+    let backup = hooks::gemini_write(install, &fingerprint)?;
+    let updated = shared.settings.lock().unwrap().clone();
+    let _ = app.emit("settings-changed", updated);
+    Ok(backup)
+}
+
+// ── Codex hooks ───────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn codex_hooks_status() -> HookStatus {
+    hooks::codex_status()
+}
+
+#[tauri::command]
+fn codex_hooks_preview(install: bool) -> Result<HookPreview, String> {
+    hooks::codex_preview(install)
+}
+
+#[tauri::command]
+fn codex_hooks_apply(
+    app: AppHandle,
+    shared: State<Shared>,
+    install: bool,
+    fingerprint: String,
+) -> Result<String, String> {
+    let backup = hooks::codex_write(install, &fingerprint)?;
+    let updated = shared.settings.lock().unwrap().clone();
+    let _ = app.emit("settings-changed", updated);
+    Ok(backup)
+}
+
+// ── StatusLine relay ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn statusline_status() -> HookStatus {
+    hooks::statusline_status()
+}
+
+#[tauri::command]
+fn statusline_preview(install: bool) -> Result<HookPreview, String> {
+    hooks::statusline_preview(install)
+}
+
+#[tauri::command]
+fn statusline_apply(
+    app: AppHandle,
+    shared: State<Shared>,
+    install: bool,
+    fingerprint: String,
+) -> Result<String, String> {
+    let backup = hooks::statusline_write(install, &fingerprint)?;
+    let updated = shared.settings.lock().unwrap().clone();
+    let _ = app.emit("settings-changed", updated);
+    Ok(backup)
+}
+
 
 #[tauri::command]
 fn approval_decision(app: AppHandle, request_id: String, decision: String) {
@@ -387,6 +492,18 @@ pub fn run() {
             hooks_status,
             hooks_preview,
             hooks_apply,
+            agy_hooks_status,
+            agy_hooks_preview,
+            agy_hooks_apply,
+            gemini_hooks_status,
+            gemini_hooks_preview,
+            gemini_hooks_apply,
+            codex_hooks_status,
+            codex_hooks_preview,
+            codex_hooks_apply,
+            statusline_status,
+            statusline_preview,
+            statusline_apply,
             approval_decision,
             approval_ack,
             approval_decline,
@@ -401,6 +518,7 @@ pub fn run() {
             open_n8n,
             open_settings_window,
             set_paused,
+            media_control,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

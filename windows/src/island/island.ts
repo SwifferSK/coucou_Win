@@ -97,6 +97,7 @@ export class Island {
     this.greeting.onComplete = () => this.fsm.greetComplete();
     State.subscribe(() => {
       this.dirty = true;
+      syncMiniBotStates(State.tasks);
       this.ensureRunning();
     });
   }
@@ -126,6 +127,7 @@ export class Island {
           integration_stripe: "https://dashboard.stripe.com/payments",
           integration_notion: "https://notion.so",
           integration_calcom: "https://app.cal.com/bookings",
+          integration_spotify: "https://open.spotify.com",
         };
         if (task.id === "integration_claude") void Bridge.openInVSCode(task.sessionCwd ?? null);
         else if (task.id === "integration_n8n") void Bridge.openN8n();
@@ -788,10 +790,20 @@ export class Island {
     if (!ctx) return;
 
     const focus = State.focusTask;
-    this.engine.bodyColor = focus?.isIntegration ? hexToRGB(focus.color) : null;
+    const isService = focus?.isIntegration === true;
+    this.engine.bodyColor = isService ? hexToRGB(focus.color) : null;
     this.engine.particleOverhang = BOT_OVERHANG;
     this.engine.lookX = this.lookX();
     this.engine.lookY = this.lookY();
+
+    const targetState = State.effectiveState;
+    if (this.engine.state !== targetState) {
+      this.engine.setState(targetState);
+    }
+    if (focus?.emote && this.engine.permanentEmote !== focus.emote) {
+      this.engine.setPermanentEmote(focus.emote);
+    }
+
     if (this.engine.morph > 0.3) {
       this.engine.slotHTarget = State.fileDragOver ? 0.2 : 0;
     } else {

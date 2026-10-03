@@ -5,15 +5,8 @@
 
 use std::path::PathBuf;
 
-#[cfg(windows)]
 mod windows;
-#[cfg(windows)]
 pub use self::windows::*;
-
-#[cfg(target_os = "linux")]
-mod linux;
-#[cfg(target_os = "linux")]
-pub use self::linux::*;
 
 /// Wall-clock time in the user's time zone, for log lines and backup names.
 pub struct LocalTime {
