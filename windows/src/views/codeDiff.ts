@@ -1,9 +1,11 @@
-// Live Code Diff Viewer — inspired by Coucou/NotchBuddy live diff viewer.
+// Live Code Diff Viewer — pixel-perfect match with NotchBuddy / Coucou Dynamic Island live diff.
 // Displays file modifications (replace_file_content, Edit, Write) with syntax highlighting,
-// line numbers, and formatted +/- diffs.
+// line numbers, live status pipeline, and formatted +/- diffs across the full notch width.
 
-import { h } from "./dom";
-import type { LiveCodeDiff } from "../core/state";
+import { h, svg } from "./dom";
+import { ICONS } from "./icons";
+import { createMiniBot } from "../mochi/minibots";
+import type { AgentTask, LiveCodeDiff } from "../core/state";
 
 const EXT_COLORS: Record<string, { bg: string; text: string }> = {
   ts: { bg: "#3178c6", text: "#fff" },
@@ -23,20 +25,20 @@ const EXT_COLORS: Record<string, { bg: string; text: string }> = {
 function getExtBadge(ext: string): HTMLElement {
   const clean = ext.toLowerCase().replace(/^\./, "");
   const style = EXT_COLORS[clean] || { bg: "#4f5666", text: "#fff" };
-  const badge = h("span", {
+  return h("span", {
     class: "diff-ext-badge",
-    style: `background:${style.bg};color:${style.text};font-weight:700;font-size:9.5px;padding:2px 4px;border-radius:3px;letter-spacing:0.5px;text-transform:uppercase;`,
-    text: clean.slice(0, 4) || "FILE",
+    style: `background:${style.bg};color:${style.text};`,
+    text: clean.slice(0, 4).toUpperCase() || "FILE",
   });
-  return badge;
 }
 
 /** Basic syntax tokenization for keywords, strings, types, and numbers. */
 function highlightCode(code: string): HTMLElement {
   const span = h("span", { class: "code-tokens" });
   
-  // Quick regex tokenizer
-  const parts = code.split(/(\b(?:const|let|var|function|export|import|from|return|type|interface|class|pub|fn|mut|struct|def|async|await|if|else|switch|case|true|false|null|undefined)\b|"[^"]*"|'[^']*'|`[^`]*`|\b\d+(?:\.\d+)?\b)/g);
+  const parts = code.split(
+    /(\b(?:const|let|var|function|export|import|from|return|type|interface|class|pub|fn|mut|struct|def|async|await|if|else|switch|case|true|false|null|undefined)\b|"[^"]*"|'[^']*'|`[^`]*`|\b\d+(?:\.\d+)?\b)/g,
+  );
 
   for (const part of parts) {
     if (!part) continue;
@@ -56,11 +58,83 @@ function highlightCode(code: string): HTMLElement {
   return span;
 }
 
-export function buildCodeDiffCard(diff: LiveCodeDiff): HTMLElement {
+function makeLine(num: number, kind: "ctx" | "add" | "del", content: string): HTMLElement {
+  const lineEl = h("div", { class: `diff-line ${kind}` });
+  const numEl = h("span", { class: "diff-num", text: String(num) });
+  const signEl = h("span", {
+    class: "diff-sign",
+    text: kind === "add" ? "+" : kind === "del" ? "-" : " ",
+  });
+
+  const contentEl = h("span", { class: "diff-content" });
+  contentEl.append(highlightCode(content));
+
+  if (kind === "add") {
+    contentEl.append(h("span", { class: "diff-cursor" }));
+  }
+
+  lineEl.append(numEl, signEl, contentEl);
+  return lineEl;
+}
+
+export function buildLiveDiffWorkspace(task: AgentTask, diff: LiveCodeDiff): HTMLElement {
+  // ── 1. Left Sidebar ────────────────────────────────────────────────────────
+  const mochiCanvas = createMiniBot(task, 46);
+  
+  // Thought bubble badge (blue circle with 3 white dots)
+  const thoughtBadge = h(
+    "div",
+    { class: "diff-thought-badge" },
+    h("span", { class: "diff-thought-dot" }),
+    h("span", { class: "diff-thought-dot" }),
+    h("span", { class: "diff-thought-dot" }),
+  );
+
+  const mochiBox = h("div", { class: "diff-mochi-box" }, mochiCanvas, thoughtBadge);
+
+  let toolLabel = "Claude Code";
+  if (task.id === "agent_antigravity") toolLabel = "Antigravity";
+  else if (task.id === "agent_cursor") toolLabel = "Cursor";
+  else if (task.id === "agent_codex") toolLabel = "Codex";
+  else if (task.id === "agent_gemini") toolLabel = "Gemini CLI";
+
+  const infoBox = h(
+    "div",
+    { class: "diff-info-box" },
+    h("span", { class: "diff-project-title", text: task.name || "Workspace" }),
+    h("span", { class: "diff-agent-subtitle", text: toolLabel }),
+  );
+
+  // Status steps pipeline (Read -> Edit -> Bash -> Done)
+  const stepRead = h("div", { class: "diff-step-item done" },
+    svg(ICONS.checkCircle, 12),
+    h("span", { text: "Read" }),
+  );
+
+  const spinnerIcon = h("span", { class: "diff-step-spinner" });
+  const stepEdit = h("div", { class: "diff-step-item active" },
+    spinnerIcon,
+    h("span", { text: "Edit" }),
+  );
+
+  const stepBash = h("div", { class: "diff-step-item idle" },
+    svg(ICONS.terminal, 11),
+    h("span", { text: "Bash" }),
+  );
+
+  const stepDone = h("div", { class: "diff-step-item idle" },
+    svg(ICONS.checkCircle, 12),
+    h("span", { text: "Done" }),
+  );
+
+  const pipeline = h("div", { class: "diff-pipeline" }, stepRead, stepEdit, stepBash, stepDone);
+
+  const sidebar = h("div", { class: "diff-workspace-sidebar" }, mochiBox, infoBox, pipeline);
+
+  // ── 2. Right Code Editor Window ────────────────────────────────────────────
   const ext = diff.fileExt || diff.fileName.split(".").pop() || "txt";
   const badge = getExtBadge(ext);
 
-  // Header: Badge + Filename + Yellow indicator + Right path
   const head = h(
     "div",
     { class: "diff-card-head" },
@@ -72,7 +146,6 @@ export function buildCodeDiffCard(diff: LiveCodeDiff): HTMLElement {
     h("span", { class: "diff-filepath", text: diff.filePath }),
   );
 
-  // Code Body with line numbers
   const body = h("div", { class: "diff-card-body" });
   let lineNum = Math.max(1, diff.startLine - 2);
 
@@ -96,26 +169,8 @@ export function buildCodeDiffCard(diff: LiveCodeDiff): HTMLElement {
     body.append(makeLine(lineNum++, "ctx", line));
   }
 
-  return h("div", { class: "diff-viewer-card" }, head, body);
-}
+  const editorWindow = h("div", { class: "diff-editor-window" }, head, body);
 
-function makeLine(num: number, kind: "ctx" | "add" | "del", content: string): HTMLElement {
-  const lineEl = h("div", { class: `diff-line ${kind}` });
-  
-  const numEl = h("span", { class: "diff-num", text: String(num) });
-  
-  const signEl = h("span", {
-    class: "diff-sign",
-    text: kind === "add" ? "+" : kind === "del" ? "-" : " ",
-  });
-
-  const contentEl = h("span", { class: "diff-content" });
-  contentEl.append(highlightCode(content));
-
-  if (kind === "add") {
-    contentEl.append(h("span", { class: "diff-cursor", text: " " }));
-  }
-
-  lineEl.append(numEl, signEl, contentEl);
-  return lineEl;
+  // ── 3. Full Workspace Container ────────────────────────────────────────────
+  return h("div", { class: "diff-workspace-container" }, sidebar, editorWindow);
 }

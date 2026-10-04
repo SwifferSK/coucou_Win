@@ -50,5 +50,9 @@ export const ICONS = {
   prevTrack: "M19 6v12l-8-6 8-6zm-9 0v12H8V6h2z",
   // music.note
   musicNote: "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z",
+  // terminal (>_)
+  terminal: "M4 17l6-5-6-5v10zm8 2h8v-2h-8v2z",
+  // check.circle.fill
+  checkCircle: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
 } as const;
 

@@ -11,7 +11,7 @@ import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
-import { buildCodeDiffCard } from "./codeDiff";
+import { buildLiveDiffWorkspace } from "./codeDiff";
 
 export interface ViewActions {
   setView(v: IslandViewName): void;
@@ -131,10 +131,14 @@ function buildOverview(actions: ViewActions): ViewHost {
   const pills = h("div", { class: "pills" });
   const right = card(null, pills);
 
-  const el = h("div", { class: "view overview" },
+  const standardOverview = h("div", { class: "overview-standard" },
     h("div", { class: "left" }, left),
     h("div", { class: "right" }, right),
   );
+
+  const diffContainer = h("div", { class: "overview-diff-view" });
+
+  const el = h("div", { class: "view overview" }, standardOverview);
 
   let pillIds = "";
   let detailOpen = false;
@@ -162,7 +166,7 @@ function buildOverview(actions: ViewActions): ViewHost {
   return {
     el,
     tick(nowMs: number) {
-      if (mode === "ticker") ticker.tick(nowMs);
+      if (mode === "ticker" && !State.activeDiff) ticker.tick(nowMs);
     },
     sync() {
       const task = State.focusTask;
@@ -173,9 +177,24 @@ function buildOverview(actions: ViewActions): ViewHost {
         mode = null;
       }
 
-      // Workspace tasks (VS Code, Antigravity, Cursor, Codex, Agents) show the live ticker;
-      // Service integrations show their own cards.
       const isWorkspace = task && (!task.isIntegration || WORKSPACE_PILL_IDS.includes(task.id) || task.id.startsWith("agent_"));
+
+      // ── Full-width Live Diff Workspace Mode ──
+      if (isWorkspace && State.activeDiff) {
+        if (!el.contains(diffContainer)) {
+          clear(el);
+          el.append(diffContainer);
+        }
+        clear(diffContainer);
+        diffContainer.append(buildLiveDiffWorkspace(task, State.activeDiff));
+        return;
+      }
+
+      // ── Standard Overview Mode ──
+      if (!el.contains(standardOverview)) {
+        clear(el);
+        el.append(standardOverview);
+      }
 
       if (task && isWorkspace) {
         if (mode !== "ticker") {
@@ -222,23 +241,13 @@ function buildOverview(actions: ViewActions): ViewHost {
 
       jump.style.display = detailOpen ? "none" : "";
 
-      if (isWorkspace && State.activeDiff) {
-        pillIds = "";
-        clear(right);
-        right.append(buildCodeDiffCard(State.activeDiff));
-      } else {
-        if (!right.contains(pills)) {
-          clear(right);
-          right.append(pills);
-        }
-        const others = State.otherTasks.slice(0, 4);
-        const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
-        if (pillKey !== pillIds) {
-          pillIds = pillKey;
-          clear(pills);
-          for (const t of others) pills.append(buildPill(t, actions));
-          pruneMiniBots();
-        }
+      const others = State.otherTasks.slice(0, 4);
+      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
+      if (pillKey !== pillIds) {
+        pillIds = pillKey;
+        clear(pills);
+        for (const t of others) pills.append(buildPill(t, actions));
+        pruneMiniBots();
       }
     },
   };
