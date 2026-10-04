@@ -34,6 +34,18 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface LiveCodeDiff {
+  fileName: string;
+  filePath: string;
+  fileExt?: string;
+  startLine: number;
+  deleted: string[];
+  added: string[];
+  contextBefore?: string[];
+  contextAfter?: string[];
+  timestamp: number;
+}
+
 export type PromptContext =
   | { kind: "window"; appName: string; title: string; url?: string }
   | { kind: "file"; name: string; path?: string };
@@ -180,6 +192,7 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  activeDiff: LiveCodeDiff | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};
 

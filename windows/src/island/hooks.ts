@@ -3,7 +3,7 @@
 
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
-import { State, WORKSPACE_PILL_IDS } from "../core/state";
+import { State, WORKSPACE_PILL_IDS, type LiveCodeDiff } from "../core/state";
 import type { Island } from "./island";
 
 /** Clears the approval card if no decision was made before the hook gave up. */
@@ -125,6 +125,54 @@ function approvalTarget(tool: string, input: Record<string, unknown>): string {
   return tool;
 }
 
+function extractLiveDiff(tool: string, input: Record<string, unknown>): LiveCodeDiff | null {
+  const filePath = (input.TargetFile || input.file_path || input.FilePath || input.path || input.AbsolutePath || "") as string;
+  if (!filePath) return null;
+
+  const fileName = lastPathComponent(filePath);
+  const ext = fileName.split(".").pop() || "";
+  let startLine = typeof input.StartLine === "number" ? input.StartLine : 1;
+
+  let deleted: string[] = [];
+  let added: string[] = [];
+
+  if (tool === "replace_file_content" || tool === "Edit" || tool === "edit") {
+    const target = (input.TargetContent || input.old_string || input.old_str || "") as string;
+    const repl = (input.ReplacementContent || input.new_string || input.new_str || "") as string;
+    if (target || repl) {
+      deleted = target ? target.split("\n").slice(0, 6) : [];
+      added = repl ? repl.split("\n").slice(0, 6) : [];
+    }
+  } else if (tool === "multi_replace_file_content" || tool === "MultiEdit") {
+    const chunks = Array.isArray(input.ReplacementChunks) ? input.ReplacementChunks : [];
+    if (chunks.length > 0 && typeof chunks[0] === "object" && chunks[0] !== null) {
+      const c = chunks[0] as Record<string, unknown>;
+      if (typeof c.StartLine === "number") startLine = c.StartLine;
+      const target = (c.TargetContent || "") as string;
+      const repl = (c.ReplacementContent || "") as string;
+      deleted = target ? target.split("\n").slice(0, 5) : [];
+      added = repl ? repl.split("\n").slice(0, 5) : [];
+    }
+  } else if (tool === "write_to_file" || tool === "Write" || tool === "write") {
+    const code = (input.CodeContent || input.content || "") as string;
+    if (code) {
+      added = code.split("\n").slice(0, 6);
+    }
+  }
+
+  if (deleted.length === 0 && added.length === 0) return null;
+
+  return {
+    fileName,
+    filePath,
+    fileExt: ext,
+    startLine,
+    deleted,
+    added,
+    timestamp: performance.now(),
+  };
+}
+
 function upsert(projectName: string, cwd: string, targetId: string) {
   const t = State.tasks.find((x) => x.id === targetId);
   if (!t) return;
@@ -218,6 +266,10 @@ function handleHook(island: Island, payload: HookPayload) {
       State.setFocus(agentId);
       State.updateTask(agentId, "working");
       const tool = payload.tool_name ?? "Tool";
+      const diff = extractLiveDiff(tool, payload.tool_input ?? {});
+      if (diff) {
+        State.activeDiff = diff;
+      }
       State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
       surface("overview", false);
       Sound.play("work");
@@ -258,9 +310,10 @@ function handleHook(island: Island, payload: HookPayload) {
       stopResetTimeout = window.setTimeout(() => {
         stopResetTimeout = null;
         State.updateTask(agentId, "idle");
+        State.activeDiff = null;
         clearSession(agentId);
         State.notify();
-      }, 5200);
+      }, 8000);
       break;
     }
 

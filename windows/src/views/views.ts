@@ -11,6 +11,7 @@ import { createMiniBot, pruneMiniBots } from "../mochi/minibots";
 import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
+import { buildCodeDiffCard } from "./codeDiff";
 
 export interface ViewActions {
   setView(v: IslandViewName): void;
@@ -221,13 +222,23 @@ function buildOverview(actions: ViewActions): ViewHost {
 
       jump.style.display = detailOpen ? "none" : "";
 
-      const others = State.otherTasks.slice(0, 4);
-      const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
-      if (pillKey !== pillIds) {
-        pillIds = pillKey;
-        clear(pills);
-        for (const t of others) pills.append(buildPill(t, actions));
-        pruneMiniBots();
+      if (isWorkspace && State.activeDiff) {
+        pillIds = "";
+        clear(right);
+        right.append(buildCodeDiffCard(State.activeDiff));
+      } else {
+        if (!right.contains(pills)) {
+          clear(right);
+          right.append(pills);
+        }
+        const others = State.otherTasks.slice(0, 4);
+        const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
+        if (pillKey !== pillIds) {
+          pillIds = pillKey;
+          clear(pills);
+          for (const t of others) pills.append(buildPill(t, actions));
+          pruneMiniBots();
+        }
       }
     },
   };
