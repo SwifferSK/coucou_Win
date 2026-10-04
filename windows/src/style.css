@@ -1668,6 +1668,36 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--dim);
 }
 
+.kicad-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(47, 101, 184, 0.18);
+  border: 1px solid rgba(47, 101, 184, 0.35);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font: 500 10px var(--font);
+  color: #7bb1f8;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+
+.kicad-more-btn:hover {
+  background: rgba(47, 101, 184, 0.35);
+  border-color: rgba(47, 101, 184, 0.6);
+  color: #ffffff;
+}
+
+.kicad-list-stats {
+  font: 500 10px var(--mono);
+  color: #7bb1f8;
+  margin-left: auto;
+  margin-right: 6px;
+  background: rgba(47, 101, 184, 0.15);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 .kicad-project-box {
   background: radial-gradient(160px 80px at 0% 0%, rgba(47, 101, 184, 0.22), transparent),
               rgba(255, 255, 255, 0.035);

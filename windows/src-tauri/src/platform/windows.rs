@@ -413,6 +413,18 @@ pub fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<WindowContex
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct KiCadProjectSummary {
+    pub name: String,
+    pub path: String,
+    pub dir: String,
+    pub footprints: usize,
+    pub nets: usize,
+    pub symbols: usize,
+    pub last_modified: u64,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct KiCadProjectInfo {
     pub running: bool,
     pub active_editor: String,
@@ -424,6 +436,7 @@ pub struct KiCadProjectInfo {
     pub symbols: usize,
     pub has_gerber: bool,
     pub last_modified: u64,
+    pub recent_projects: Vec<KiCadProjectSummary>,
 }
 
 pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
@@ -432,11 +445,13 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
     struct WinState {
         running: bool,
         editor: String,
+        active_window_title: String,
     }
 
     let mut win_state = WinState {
         running: false,
         editor: String::new(),
+        active_window_title: String::new(),
     };
 
     unsafe extern "system" fn enum_kicad_win(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -463,6 +478,9 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
                     let len = GetWindowTextW(hwnd, &mut title_buf);
                     if len > 0 {
                         let text = String::from_utf16_lossy(&title_buf[..len as usize]);
+                        if text != "Default IME" && text != "MSCTFIME UI" {
+                            state.active_window_title = text.clone();
+                        }
                         if text.contains("PCB Editor") || text.contains("pcbnew") {
                             state.editor = "PCB Editor (Pcbnew)".to_string();
                         } else if text.contains("Schematic Editor") || text.contains("eeschema") {
@@ -482,8 +500,8 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
         let _ = EnumWindows(Some(enum_kicad_win), LPARAM(&mut win_state as *mut _ as isize));
     }
 
-    // 2. Find recent/open .kicad_pro file from %APPDATA%\kicad\
-    let mut found_pro_path: Option<PathBuf> = None;
+    // 2. Find recent/open .kicad_pro files from %APPDATA%\kicad\
+    let mut all_candidates = Vec::new();
     if let Some(appdata) = std::env::var_os("APPDATA") {
         let kicad_base = PathBuf::from(appdata).join("kicad");
         if kicad_base.is_dir() {
@@ -511,7 +529,6 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
                 }
             }
 
-            let mut candidates = Vec::new();
             if let Ok(entries) = std::fs::read_dir(&kicad_base) {
                 for entry in entries.flatten() {
                     let path = entry.path();
@@ -522,7 +539,7 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
                                 if sub_path.extension().map_or(false, |ext| ext == "json") {
                                     if let Ok(content) = std::fs::read_to_string(&sub_path) {
                                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                                            extract_pro_paths(&json, &mut candidates);
+                                            extract_pro_paths(&json, &mut all_candidates);
                                         }
                                     }
                                 }
@@ -531,79 +548,108 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
                     } else if path.extension().map_or(false, |ext| ext == "json") {
                         if let Ok(content) = std::fs::read_to_string(&path) {
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                                extract_pro_paths(&json, &mut candidates);
+                                extract_pro_paths(&json, &mut all_candidates);
                             }
                         }
                     }
                 }
             }
-
-            // Pick candidate with latest modified time
-            candidates.sort_by_key(|p| {
-                p.metadata()
-                    .and_then(|m| m.modified())
-                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            });
-            found_pro_path = candidates.pop();
         }
     }
 
-    let (project_name, project_path, project_dir, footprints, nets, symbols, has_gerber, last_modified) =
-        if let Some(ref pro_path) = found_pro_path {
-            let p_dir = pro_path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
-            let p_name = pro_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    // Deduplicate paths
+    all_candidates.sort();
+    all_candidates.dedup();
 
-            let mut fp_count = 0;
-            let mut net_count = 0;
-            let mut sym_count = 0;
-            let mut mtime_ms = 0u64;
+    // Sort by modified time descending (newest first)
+    all_candidates.sort_by_key(|p| {
+        std::cmp::Reverse(
+            p.metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+        )
+    });
 
-            // Parse .kicad_pcb
-            let pcb_path = p_dir.join(format!("{p_name}.kicad_pcb"));
-            if let Ok(content) = std::fs::read_to_string(&pcb_path) {
-                fp_count = content.matches("(footprint ").count();
-                net_count = content.matches("(net ").count();
-                if let Ok(meta) = std::fs::metadata(&pcb_path) {
-                    if let Ok(mtime) = meta.modified() {
-                        if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
-                            mtime_ms = dur.as_millis() as u64;
+    // If KiCad is running and active window title matches one of the projects, bring it to the front
+    if win_state.running && !win_state.active_window_title.is_empty() {
+        if let Some(pos) = all_candidates.iter().position(|p| {
+            if let Some(stem) = p.file_stem() {
+                let s = stem.to_string_lossy().to_lowercase();
+                win_state.active_window_title.to_lowercase().contains(&s)
+            } else {
+                false
+            }
+        }) {
+            let active = all_candidates.remove(pos);
+            all_candidates.insert(0, active);
+        }
+    }
+
+    let mut recent_projects = Vec::new();
+    for pro_path in all_candidates.iter().take(6) {
+        let p_dir = pro_path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let p_name = pro_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+
+        let mut fp = 0;
+        let mut net = 0;
+        let mut sym = 0;
+        let mut mtime = 0u64;
+
+        let pcb_path = p_dir.join(format!("{p_name}.kicad_pcb"));
+        if let Ok(content) = std::fs::read_to_string(&pcb_path) {
+            fp = content.matches("(footprint ").count();
+            net = content.matches("(net ").count();
+            if let Ok(meta) = std::fs::metadata(&pcb_path) {
+                if let Ok(mt) = meta.modified() {
+                    if let Ok(dur) = mt.duration_since(std::time::UNIX_EPOCH) {
+                        mtime = dur.as_millis() as u64;
+                    }
+                }
+            }
+        }
+
+        let sch_path = p_dir.join(format!("{p_name}.kicad_sch"));
+        if let Ok(content) = std::fs::read_to_string(&sch_path) {
+            sym = content.matches("(symbol ").count();
+            if mtime == 0 {
+                if let Ok(meta) = std::fs::metadata(&sch_path) {
+                    if let Ok(mt) = meta.modified() {
+                        if let Ok(dur) = mt.duration_since(std::time::UNIX_EPOCH) {
+                            mtime = dur.as_millis() as u64;
                         }
                     }
                 }
             }
+        }
 
-            // Parse .kicad_sch
-            let sch_path = p_dir.join(format!("{p_name}.kicad_sch"));
-            if let Ok(content) = std::fs::read_to_string(&sch_path) {
-                sym_count = content.matches("(symbol ").count();
-                if mtime_ms == 0 {
-                    if let Ok(meta) = std::fs::metadata(&sch_path) {
-                        if let Ok(mtime) = meta.modified() {
-                            if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
-                                mtime_ms = dur.as_millis() as u64;
-                            }
-                        }
-                    }
-                }
-            }
+        recent_projects.push(KiCadProjectSummary {
+            name: p_name,
+            path: pro_path.to_string_lossy().to_string(),
+            dir: p_dir.to_string_lossy().to_string(),
+            footprints: fp,
+            nets: net,
+            symbols: sym,
+            last_modified: mtime,
+        });
+    }
 
-            let gerber_exists = p_dir.join("Gerber").is_dir()
-                || p_dir.join("gerber").is_dir()
-                || p_dir.join("gerbers").is_dir();
+    let primary = recent_projects.first();
+    let project_name = primary.map(|p| p.name.clone()).unwrap_or_else(|| "KiCad EDA".to_string());
+    let project_path = primary.map(|p| p.path.clone()).unwrap_or_default();
+    let project_dir = primary.map(|p| p.dir.clone()).unwrap_or_default();
+    let footprints = primary.map(|p| p.footprints).unwrap_or(0);
+    let nets = primary.map(|p| p.nets).unwrap_or(0);
+    let symbols = primary.map(|p| p.symbols).unwrap_or(0);
+    let last_modified = primary.map(|p| p.last_modified).unwrap_or(0);
 
-            (
-                p_name,
-                pro_path.to_string_lossy().to_string(),
-                p_dir.to_string_lossy().to_string(),
-                fp_count,
-                net_count,
-                sym_count,
-                gerber_exists,
-                mtime_ms,
-            )
-        } else {
-            ("KiCad EDA".to_string(), String::new(), String::new(), 0, 0, 0, false, 0)
-        };
+    let has_gerber = if !project_dir.is_empty() {
+        let p_dir = PathBuf::from(&project_dir);
+        p_dir.join("Gerber").is_dir()
+            || p_dir.join("gerber").is_dir()
+            || p_dir.join("gerbers").is_dir()
+    } else {
+        false
+    };
 
     let active_editor = if win_state.running {
         if !win_state.editor.is_empty() {
@@ -626,6 +672,7 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
         symbols,
         has_gerber,
         last_modified,
+        recent_projects,
     })
 }
 

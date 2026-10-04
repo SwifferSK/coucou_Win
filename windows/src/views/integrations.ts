@@ -20,9 +20,11 @@ export function timeAgo(value: unknown): string {
   return `${Math.floor(diff / 86400)}d`;
 }
 
-function header(color: string, name: string, kind: string, extra?: Node): HTMLElement {
+function header(color: string, name: string, kind: string, ...extra: (Node | null | undefined)[]): HTMLElement {
   const row = h("div", { class: "int-head" }, dot(color, 7), h("b", { text: name }), h("span", { text: kind }));
-  if (extra) row.append(extra);
+  for (const node of extra) {
+    if (node) row.append(node);
+  }
   return row;
 }
 
@@ -439,7 +441,67 @@ function spotifyCard(): HTMLElement {
   return h("div", { class: "int-card spotify-card" }, head, trackBox);
 }
 
-function kicadCard(): HTMLElement {
+interface KiCadProjectSummary {
+  name: string;
+  path: string;
+  dir: string;
+  footprints: number;
+  nets: number;
+  symbols: number;
+  lastModified: number;
+}
+
+function kicadDetail(onBack: () => void): HTMLElement {
+  const data = get("integration_kicad");
+  const recent = (data.recentProjects as KiCadProjectSummary[]) || [];
+
+  const rows = h("div", { class: "int-rows kicad-recent-list" });
+  for (const proj of recent) {
+    const nameEl = h("span", { class: "int-name", text: proj.name });
+    const agoEl = h("span", { class: "int-ago", text: proj.lastModified > 0 ? timeAgo(proj.lastModified) : "" });
+    const statsEl = h("span", { class: "kicad-list-stats", text: `${proj.footprints}c / ${proj.nets}n` });
+
+    const openBtn = h(
+      "button",
+      {
+        class: "int-more",
+        title: `Open ${proj.name}`,
+        onclick: (e: Event) => {
+          e.stopPropagation();
+          void Bridge.openKiCad(proj.path);
+        },
+      },
+      svg(ICONS.arrowUpRight, 8),
+    );
+
+    const row = listRow("#2F65B8", false, nameEl, statsEl, agoEl, openBtn);
+    row.style.cursor = "pointer";
+    row.onclick = () => {
+      void Bridge.openKiCad(proj.path);
+    };
+    rows.append(row);
+  }
+
+  return h(
+    "div",
+    { class: "int-card detail" },
+    h(
+      "div",
+      { class: "int-detail-head" },
+      h("button", { class: "int-back", onclick: onBack }, svg(ICONS.chevronLeft, 10, { stroke: 2.4 })),
+      dot("#2F65B8", 6),
+      h("b", { text: "Recent KiCad Projects" }),
+      h("span", {
+        class: "int-badge",
+        style: "color:#7bb1f8;background:rgba(47,101,184,0.2)",
+        text: `${recent.length} found`,
+      }),
+    ),
+    rows,
+  );
+}
+
+function kicadCard(onDetail: () => void): HTMLElement {
   const data = get("integration_kicad");
   const isRunning = Boolean(data.running);
   const activeEditor = (data.activeEditor as string) || (isRunning ? "KiCad Active" : "Ready");
@@ -451,13 +513,31 @@ function kicadCard(): HTMLElement {
   const symbols = Number(data.symbols ?? 0);
   const hasGerber = Boolean(data.hasGerber);
   const lastModified = Number(data.lastModified ?? 0);
+  const recent = (data.recentProjects as KiCadProjectSummary[]) || [];
 
   const statusDotEl = dot(isRunning ? "#22C55E" : "#8E939C", 6);
+  const extraBadge = recent.length > 1
+    ? h(
+        "button",
+        {
+          class: "kicad-more-btn",
+          title: "View All Projects",
+          onclick: (e: Event) => {
+            e.stopPropagation();
+            onDetail();
+          },
+        },
+        h("span", { text: `${recent.length} proj` }),
+        svg(ICONS.ellipsis, 8),
+      )
+    : null;
+
   const head = header(
     "#2F65B8",
     "KiCad",
     isRunning ? activeEditor : "EDA Project",
     h("div", { class: "kicad-head-badge" }, statusDotEl, h("span", { text: isRunning ? "Running" : "Idle" })),
+    extraBadge,
   );
 
   const projectBox = h(
@@ -547,7 +627,7 @@ export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHoo
     return spotifyCard();
   }
   if (task.id === "integration_kicad") {
-    return kicadCard();
+    return hooks.detailOpen ? kicadDetail(hooks.closeDetail) : kicadCard(hooks.openDetail);
   }
   if (task.id === "integration_n8n") {
     const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");
