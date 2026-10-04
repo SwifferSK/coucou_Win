@@ -122,6 +122,13 @@ export const Bridge = {
 
   /** Control playback (Spotify, Media): "play_pause", "next", "prev" */
   mediaControl: (action: string) => call<void>("media_control", { action }),
+
+  /** Gets active application window under cursor for context dragging */
+  getWindowAtCursor: (screenX: number, screenY: number) =>
+    call<{ appName: string; title: string; url?: string } | null>("get_window_at_cursor", {
+      screenX,
+      screenY,
+    }),
 };
 
 export interface IntegrationUpdate {

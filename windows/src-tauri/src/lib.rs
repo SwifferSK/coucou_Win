@@ -463,6 +463,11 @@ fn open_settings_window(app: AppHandle) {
     show_settings_window(&app);
 }
 
+#[tauri::command]
+fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<platform::WindowContextInfo> {
+    platform::get_window_at_cursor(screen_x, screen_y)
+}
+
 pub fn run() {
     platform::prepare_environment();
     let loaded = settings::load();
@@ -519,6 +524,7 @@ pub fn run() {
             open_settings_window,
             set_paused,
             media_control,
+            get_window_at_cursor,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

@@ -338,3 +338,75 @@ pub fn media_control(action: &str) {
     }
 }
 
+// ── Window Context Capture ───────────────────────────────────────────────────
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowContextInfo {
+    pub app_name: String,
+    pub title: String,
+    pub url: Option<String>,
+}
+
+pub fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<WindowContextInfo> {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetWindowTextW, GetWindowThreadProcessId, WindowFromPoint, GA_ROOT,
+    };
+
+    let pt = POINT { x: screen_x, y: screen_y };
+    unsafe {
+        let hwnd_raw = WindowFromPoint(pt);
+        if hwnd_raw.0.is_null() {
+            return None;
+        }
+        let root_hwnd = GetAncestor(hwnd_raw, GA_ROOT);
+        let hwnd = if !root_hwnd.0.is_null() { root_hwnd } else { hwnd_raw };
+
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return None;
+        }
+
+        let mut title_buf = [0u16; 512];
+        let len = GetWindowTextW(hwnd, &mut title_buf);
+        let title = if len > 0 {
+            String::from_utf16_lossy(&title_buf[..len as usize])
+        } else {
+            String::new()
+        };
+
+        let mut app_name = String::new();
+        if let Ok(proc) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            let mut name_buf = [0u16; 260];
+            let mut size = name_buf.len() as u32;
+            if windows::Win32::System::Threading::QueryFullProcessImageNameW(
+                proc,
+                windows::Win32::System::Threading::PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(name_buf.as_mut_ptr()),
+                &mut size,
+            ).is_ok() {
+                let full_path = String::from_utf16_lossy(&name_buf[..size as usize]);
+                if let Some(file_name) = std::path::Path::new(&full_path).file_name() {
+                    app_name = file_name.to_string_lossy().to_string();
+                    if app_name.to_lowercase().ends_with(".exe") {
+                        app_name.truncate(app_name.len() - 4);
+                    }
+                }
+            }
+            let _ = CloseHandle(proc);
+        }
+
+        if app_name.is_empty() && title.is_empty() {
+            return None;
+        }
+
+        Some(WindowContextInfo {
+            app_name,
+            title,
+            url: None,
+        })
+    }
+}
+
+

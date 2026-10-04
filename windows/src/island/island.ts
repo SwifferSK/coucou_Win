@@ -534,6 +534,9 @@ export class Island {
       if (State.mode === "hidden") this.fsm.mouseEntered();
     });
 
+    let botDragging = false;
+    let botDragStart = { x: 0, y: 0 };
+
     this.islandEl.addEventListener("mousedown", (e) => {
       Sound.resume();
       State.lastActivity = performance.now();
@@ -543,7 +546,30 @@ export class Island {
       }
       if (this.isBotHit(e.clientX, e.clientY)) {
         this.cancelBotHover();
-        this.engine.slap();
+        botDragging = true;
+        botDragStart = { x: e.screenX, y: e.screenY };
+      }
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (botDragging) {
+        botDragging = false;
+        const dist = Math.hypot(e.screenX - botDragStart.x, e.screenY - botDragStart.y);
+        if (dist > 30) {
+          // Dragged onto a window! Capture window context
+          void Bridge.getWindowAtCursor(Math.round(e.screenX), Math.round(e.screenY)).then((win) => {
+            if (win && (win.appName || win.title)) {
+              State.promptContext = { kind: "window", appName: win.appName, title: win.title, url: win.url };
+              State.droppedFile = null;
+              this.setView("prompt");
+              Sound.play("approve");
+              this.engine.triggerEmote("happy");
+              State.notify();
+            }
+          });
+        } else {
+          this.engine.slap();
+        }
       }
     });
 
@@ -758,7 +784,7 @@ export class Island {
     const visible = p.opacity > 0 && !greetingActive && !this.uploadActive;
     this.botCanvas.style.opacity = visible ? "1" : "0";
 
-    if (State.mode === "expanded" && State.view !== "uploading" && !greetingActive && !this.uploadActive) {
+    if (State.mode === "expanded" && State.view !== "uploading" && !greetingActive && !this.uploadActive && !isDiff) {
       const d = p.diameter;
       const color = botGlowColor(State.effectiveState);
       this.botGlow.style.display = "block";
