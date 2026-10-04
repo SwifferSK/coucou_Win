@@ -63,13 +63,13 @@ pub fn set_paused(on: bool) {
 /// Spawns every poller with the macOS delays and intervals.
 pub fn start(app: AppHandle) {
     spawn(app.clone(), "integration_spotify", 1, 2, poll_spotify);
-    spawn(app.clone(), "integration_n8n", 3, 15, poll_n8n);
-    spawn(app.clone(), "integration_vercel", 5, 30, poll_vercel);
-    spawn(app.clone(), "integration_stripe", 6, 30, poll_stripe);
-    spawn(app.clone(), "integration_resend", 6, 60, poll_resend);
-    spawn(app.clone(), "integration_github", 7, 300, poll_github);
-    spawn(app.clone(), "integration_calcom", 8, 300, poll_calcom);
-    spawn(app, "integration_notion", 9, 300, poll_notion);
+    spawn(app.clone(), "integration_n8n", 1, 15, poll_n8n);
+    spawn(app.clone(), "integration_vercel", 1, 30, poll_vercel);
+    spawn(app.clone(), "integration_stripe", 1, 30, poll_stripe);
+    spawn(app.clone(), "integration_resend", 1, 60, poll_resend);
+    spawn(app.clone(), "integration_github", 1, 60, poll_github);
+    spawn(app.clone(), "integration_calcom", 1, 60, poll_calcom);
+    spawn(app, "integration_notion", 1, 60, poll_notion);
 }
 
 /// True when the user has this integration switched on in settings.
@@ -266,22 +266,44 @@ async fn poll_stripe(app: AppHandle) {
 // ── GitHub ────────────────────────────────────────────────────────────────────
 
 async fn poll_github(app: AppHandle) {
-    let Some(token) = secrets::get("github-token") else { return };
+    let Some(token) = secrets::get("github-token") else {
+        return;
+    };
+    let clean_token = token.trim();
+    let auth_header = if clean_token.starts_with("ghp_") || clean_token.starts_with("github_pat_") {
+        format!("Bearer {clean_token}")
+    } else {
+        format!("Bearer {clean_token}")
+    };
+
     let http = client();
 
     let user = http
         .get("https://api.github.com/user")
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", &auth_header)
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "Coucou")
         .send()
         .await;
-    let Ok(response) = user else { return };
+
+    let response = match user {
+        Ok(r) => r,
+        Err(err) => {
+            emit(&app, IntegrationUpdate {
+                id: "integration_github",
+                data: json!({}),
+                error: Some(format!("Network error: {err}")),
+                event: None,
+            });
+            return;
+        }
+    };
+
     if !response.status().is_success() {
         emit(&app, IntegrationUpdate {
             id: "integration_github",
             data: json!({}),
-            error: Some(status_error(response.status().as_u16(), "Token lacks the needed scope")),
+            error: Some(status_error(response.status().as_u16(), "Token lacks the needed scope (requires read:user, repo)")),
             event: None,
         });
         return;
@@ -296,7 +318,7 @@ async fn poll_github(app: AppHandle) {
 
     let repos = http
         .get("https://api.github.com/user/repos?per_page=100&affiliation=owner&sort=pushed")
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", &auth_header)
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "Coucou")
         .send()

@@ -368,8 +368,25 @@ fn secret_present(key: String) -> bool {
 }
 
 #[tauri::command]
-fn secret_set(key: String, value: String) -> Result<(), String> {
-    secrets::set(&key, &value)
+fn secret_set(app: AppHandle, key: String, value: String) -> Result<(), String> {
+    secrets::set(&key, &value)?;
+    let integration_id = match key.as_str() {
+        "github-token" => Some("integration_github"),
+        "stripe-api-key" => Some("integration_stripe"),
+        "vercel-token" => Some("integration_vercel"),
+        "resend-api-key" => Some("integration_resend"),
+        "notion-api-key" => Some("integration_notion"),
+        "calcom-api-key" => Some("integration_calcom"),
+        "n8n-api-key" => Some("integration_n8n"),
+        _ => None,
+    };
+    if let Some(id) = integration_id {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            integrations::poll_once(handle, id).await;
+        });
+    }
+    Ok(())
 }
 
 #[tauri::command]
