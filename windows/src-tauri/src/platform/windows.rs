@@ -483,92 +483,127 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
     }
 
     // 2. Find recent/open .kicad_pro file from %APPDATA%\kicad\
-    let appdata = std::env::var_os("APPDATA")?;
-    let kicad_base = PathBuf::from(appdata).join("kicad");
-    if !kicad_base.is_dir() {
-        return None;
-    }
-
-    let versions = ["10.0", "9.0", "8.0", "7.0"];
     let mut found_pro_path: Option<PathBuf> = None;
-
-    for ver in versions {
-        let cfg_file = kicad_base.join(ver).join("kicad.json");
-        if let Ok(content) = std::fs::read_to_string(&cfg_file) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                // Check open_projects first
-                if let Some(open_arr) = json.pointer("/system/open_projects").and_then(|v| v.as_array()) {
-                    for item in open_arr {
-                        if let Some(path_str) = item.as_str() {
-                            let pb = PathBuf::from(path_str);
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        let kicad_base = PathBuf::from(appdata).join("kicad");
+        if kicad_base.is_dir() {
+            fn extract_pro_paths(v: &serde_json::Value, out: &mut Vec<PathBuf>) {
+                match v {
+                    serde_json::Value::String(s) => {
+                        if s.ends_with(".kicad_pro") {
+                            let pb = PathBuf::from(s);
                             if pb.is_file() {
-                                found_pro_path = Some(pb);
-                                break;
+                                out.push(pb);
                             }
                         }
                     }
+                    serde_json::Value::Array(arr) => {
+                        for item in arr {
+                            extract_pro_paths(item, out);
+                        }
+                    }
+                    serde_json::Value::Object(map) => {
+                        for val in map.values() {
+                            extract_pro_paths(val, out);
+                        }
+                    }
+                    _ => {}
                 }
-                if found_pro_path.is_none() {
-                    if let Some(hist_arr) = json.pointer("/system/file_history").and_then(|v| v.as_array()) {
-                        for item in hist_arr {
-                            if let Some(path_str) = item.as_str() {
-                                let pb = PathBuf::from(path_str);
-                                if pb.is_file() {
-                                    found_pro_path = Some(pb);
-                                    break;
+            }
+
+            let mut candidates = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(&kicad_base) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if let Ok(sub_entries) = std::fs::read_dir(&path) {
+                            for sub_entry in sub_entries.flatten() {
+                                let sub_path = sub_entry.path();
+                                if sub_path.extension().map_or(false, |ext| ext == "json") {
+                                    if let Ok(content) = std::fs::read_to_string(&sub_path) {
+                                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                                            extract_pro_paths(&json, &mut candidates);
+                                        }
+                                    }
                                 }
                             }
                         }
+                    } else if path.extension().map_or(false, |ext| ext == "json") {
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                                extract_pro_paths(&json, &mut candidates);
+                            }
+                        }
                     }
                 }
             }
-        }
-        if found_pro_path.is_some() {
-            break;
-        }
-    }
 
-    let pro_path = found_pro_path?;
-    let project_dir = pro_path.parent()?.to_path_buf();
-    let project_name = pro_path.file_stem()?.to_string_lossy().to_string();
-
-    let mut footprints = 0;
-    let mut nets = 0;
-    let mut symbols = 0;
-    let mut last_modified = 0u64;
-
-    // Parse .kicad_pcb
-    let pcb_path = project_dir.join(format!("{project_name}.kicad_pcb"));
-    if let Ok(content) = std::fs::read_to_string(&pcb_path) {
-        footprints = content.matches("(footprint ").count();
-        nets = content.matches("(net ").count();
-        if let Ok(meta) = std::fs::metadata(&pcb_path) {
-            if let Ok(mtime) = meta.modified() {
-                if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
-                    last_modified = dur.as_millis() as u64;
-                }
-            }
+            // Pick candidate with latest modified time
+            candidates.sort_by_key(|p| {
+                p.metadata()
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            });
+            found_pro_path = candidates.pop();
         }
     }
 
-    // Parse .kicad_sch
-    let sch_path = project_dir.join(format!("{project_name}.kicad_sch"));
-    if let Ok(content) = std::fs::read_to_string(&sch_path) {
-        symbols = content.matches("(symbol ").count();
-        if last_modified == 0 {
-            if let Ok(meta) = std::fs::metadata(&sch_path) {
-                if let Ok(mtime) = meta.modified() {
-                    if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
-                        last_modified = dur.as_millis() as u64;
+    let (project_name, project_path, project_dir, footprints, nets, symbols, has_gerber, last_modified) =
+        if let Some(ref pro_path) = found_pro_path {
+            let p_dir = pro_path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+            let p_name = pro_path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+
+            let mut fp_count = 0;
+            let mut net_count = 0;
+            let mut sym_count = 0;
+            let mut mtime_ms = 0u64;
+
+            // Parse .kicad_pcb
+            let pcb_path = p_dir.join(format!("{p_name}.kicad_pcb"));
+            if let Ok(content) = std::fs::read_to_string(&pcb_path) {
+                fp_count = content.matches("(footprint ").count();
+                net_count = content.matches("(net ").count();
+                if let Ok(meta) = std::fs::metadata(&pcb_path) {
+                    if let Ok(mtime) = meta.modified() {
+                        if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                            mtime_ms = dur.as_millis() as u64;
+                        }
                     }
                 }
             }
-        }
-    }
 
-    let has_gerber = project_dir.join("Gerber").is_dir()
-        || project_dir.join("gerber").is_dir()
-        || project_dir.join("gerbers").is_dir();
+            // Parse .kicad_sch
+            let sch_path = p_dir.join(format!("{p_name}.kicad_sch"));
+            if let Ok(content) = std::fs::read_to_string(&sch_path) {
+                sym_count = content.matches("(symbol ").count();
+                if mtime_ms == 0 {
+                    if let Ok(meta) = std::fs::metadata(&sch_path) {
+                        if let Ok(mtime) = meta.modified() {
+                            if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                                mtime_ms = dur.as_millis() as u64;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let gerber_exists = p_dir.join("Gerber").is_dir()
+                || p_dir.join("gerber").is_dir()
+                || p_dir.join("gerbers").is_dir();
+
+            (
+                p_name,
+                pro_path.to_string_lossy().to_string(),
+                p_dir.to_string_lossy().to_string(),
+                fp_count,
+                net_count,
+                sym_count,
+                gerber_exists,
+                mtime_ms,
+            )
+        } else {
+            ("KiCad EDA".to_string(), String::new(), String::new(), 0, 0, 0, false, 0)
+        };
 
     let active_editor = if win_state.running {
         if !win_state.editor.is_empty() {
@@ -584,8 +619,8 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
         running: win_state.running,
         active_editor,
         project_name,
-        project_path: pro_path.to_string_lossy().to_string(),
-        project_dir: project_dir.to_string_lossy().to_string(),
+        project_path,
+        project_dir,
         footprints,
         nets,
         symbols,
@@ -595,29 +630,77 @@ pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
 }
 
 pub fn open_kicad(project_path: Option<&str>) {
-    let mut cmd = Command::new("kicad");
+    // 1. If project path is supplied, try direct shell association
     if let Some(path) = project_path {
-        cmd.arg(path);
-    }
-    let res = no_console(&mut cmd).spawn();
-    if res.is_err() {
-        // Fallback to default Program Files path
-        let candidates = [
-            r"C:\Program Files\KiCad\9.0\bin\kicad.exe",
-            r"C:\Program Files\KiCad\10.0\bin\kicad.exe",
-            r"C:\Program Files\KiCad\8.0\bin\kicad.exe",
-            r"C:\Program Files\KiCad\7.0\bin\kicad.exe",
-        ];
-        for exe in candidates {
-            if std::path::Path::new(exe).is_file() {
-                let mut fallback_cmd = Command::new(exe);
-                if let Some(path) = project_path {
-                    fallback_cmd.arg(path);
-                }
-                let _ = no_console(&mut fallback_cmd).spawn();
-                break;
+        let trimmed = path.trim();
+        if !trimmed.is_empty() && std::path::Path::new(trimmed).exists() {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/c", "start", "", trimmed]);
+            if no_console(&mut cmd).spawn().is_ok() {
+                return;
             }
         }
+    }
+
+    // 2. Try known KiCad installation directories
+    let mut candidate_exes = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(r"C:\Program Files\KiCad") {
+        for entry in entries.flatten() {
+            let bin_exe = entry.path().join("bin").join("kicad.exe");
+            if bin_exe.is_file() {
+                candidate_exes.push(bin_exe);
+            }
+            let direct_exe = entry.path().join("kicad.exe");
+            if direct_exe.is_file() {
+                candidate_exes.push(direct_exe);
+            }
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(r"C:\Program Files (x86)\KiCad") {
+        for entry in entries.flatten() {
+            let bin_exe = entry.path().join("bin").join("kicad.exe");
+            if bin_exe.is_file() {
+                candidate_exes.push(bin_exe);
+            }
+            let direct_exe = entry.path().join("kicad.exe");
+            if direct_exe.is_file() {
+                candidate_exes.push(direct_exe);
+            }
+        }
+    }
+
+    candidate_exes.push(PathBuf::from(r"C:\Program Files\KiCad\10.0\bin\kicad.exe"));
+    candidate_exes.push(PathBuf::from(r"C:\Program Files\KiCad\9.0\bin\kicad.exe"));
+    candidate_exes.push(PathBuf::from(r"C:\Program Files\KiCad\8.0\bin\kicad.exe"));
+    candidate_exes.push(PathBuf::from(r"C:\Program Files\KiCad\7.0\bin\kicad.exe"));
+
+    for exe in candidate_exes {
+        if exe.is_file() {
+            let mut cmd = Command::new(exe);
+            if let Some(path) = project_path {
+                let trimmed = path.trim();
+                if !trimmed.is_empty() {
+                    cmd.arg(trimmed);
+                }
+            }
+            if no_console(&mut cmd).spawn().is_ok() {
+                return;
+            }
+        }
+    }
+
+    // 3. Fallback to kicad command in PATH
+    let mut cmd = Command::new("kicad");
+    if let Some(path) = project_path {
+        let trimmed = path.trim();
+        if !trimmed.is_empty() {
+            cmd.arg(trimmed);
+        }
+    }
+    if no_console(&mut cmd).spawn().is_err() {
+        let mut fallback = Command::new("cmd");
+        fallback.args(["/c", "start", "kicad"]);
+        let _ = no_console(&mut fallback).spawn();
     }
 }
 

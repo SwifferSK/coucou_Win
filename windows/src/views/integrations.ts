@@ -462,8 +462,12 @@ function kicadCard(): HTMLElement {
 
   const projectBox = h(
     "div",
-    { class: "kicad-project-box" },
-    h("div", { class: "kicad-icon-badge" }, svg(ICONS.cpu, 14)),
+    {
+      class: "kicad-project-box clickable",
+      title: projectPath ? `Open ${projectPath}` : "Open KiCad",
+      onclick: () => void Bridge.openKiCad(projectPath || null),
+    },
+    h("div", { class: "kicad-icon-badge" }, svg(ICONS.cpu, 13)),
     h("div", { class: "kicad-project-meta" },
       h("div", { class: "kicad-project-title", text: projectName }),
       h("div", { class: "kicad-project-sub", text: lastModified > 0 ? `Edited ${timeAgo(lastModified)}` : "KiCad PCB & Schematic" }),
@@ -475,7 +479,7 @@ function kicadCard(): HTMLElement {
     { class: "kicad-stats-row" },
     h("div", { class: "kicad-stat-pill" },
       h("span", { class: "kicad-stat-val", text: String(footprints) }),
-      h("span", { class: "kicad-stat-lbl", text: "components" }),
+      h("span", { class: "kicad-stat-lbl", text: "comp" }),
     ),
     h("div", { class: "kicad-stat-pill" },
       h("span", { class: "kicad-stat-val", text: String(nets) }),
@@ -490,22 +494,24 @@ function kicadCard(): HTMLElement {
     "button",
     {
       class: "kicad-btn primary",
+      title: "Launch Project in KiCad",
       onclick: () => void Bridge.openKiCad(projectPath || null),
     },
-    svg(ICONS.kicad, 12),
+    svg(ICONS.kicad, 11),
     h("span", { text: "Open in KiCad" }),
   );
 
+  const folderPathToOpen = projectDir || (projectPath ? projectPath.replace(/\\[^\\]+$/, "") : "");
   const folderBtn = h(
     "button",
     {
       class: "kicad-btn secondary",
-      title: "Open Folder",
+      title: folderPathToOpen ? `Open ${folderPathToOpen}` : "Open Project Directory",
       onclick: () => {
-        if (projectDir) void Bridge.revealInFileManager(projectDir);
+        if (folderPathToOpen) void Bridge.revealInFileManager(folderPathToOpen);
       },
     },
-    svg(ICONS.folder, 12),
+    svg(ICONS.folder, 11),
   );
 
   const actionRow = h("div", { class: "kicad-actions-row" }, openBtn, folderBtn);

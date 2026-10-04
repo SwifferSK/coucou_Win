@@ -1171,12 +1171,31 @@ input[type="range"]::-webkit-slider-thumb {
   position: relative;
   z-index: 1;
   height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.left-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.left-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.left-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
 }
 
 .int-card {
-  padding: 10px 12px 0 108px;
+  padding: 8px 10px 8px 108px;
   display: flex;
   flex-direction: column;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .int-head {
@@ -1632,8 +1651,9 @@ input[type="range"]::-webkit-slider-thumb {
 .kicad-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: 100%;
+  gap: 5px;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
 .kicad-head-badge {
@@ -1643,37 +1663,44 @@ input[type="range"]::-webkit-slider-thumb {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 999px;
-  padding: 2px 7px;
-  font: 500 10.5px var(--font);
+  padding: 1px 6px;
+  font: 500 10px var(--font);
   color: var(--dim);
 }
 
 .kicad-project-box {
-  background: radial-gradient(160px 100px at 0% 0%, rgba(47, 101, 184, 0.22), transparent),
+  background: radial-gradient(160px 80px at 0% 0%, rgba(47, 101, 184, 0.22), transparent),
               rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(47, 101, 184, 0.25);
-  border-radius: 12px;
-  padding: 8px 10px;
+  border-radius: 9px;
+  padding: 5px 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  gap: 8px;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kicad-project-box.clickable {
+  cursor: pointer;
 }
 
 .kicad-project-box:hover {
-  border-color: rgba(47, 101, 184, 0.5);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border-color: rgba(47, 101, 184, 0.6);
+  background: radial-gradient(160px 80px at 0% 0%, rgba(47, 101, 184, 0.32), transparent),
+              rgba(255, 255, 255, 0.055);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transform: translateY(-0.5px);
 }
 
 .kicad-icon-badge {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgba(47, 101, 184, 0.2);
-  border: 1px solid rgba(47, 101, 184, 0.35);
-  color: #5c9df5;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(47, 101, 184, 0.25);
+  border: 1px solid rgba(47, 101, 184, 0.4);
+  color: #7bb1f8;
   flex-shrink: 0;
 }
 
@@ -1686,7 +1713,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .kicad-project-title {
-  font: 600 12.5px var(--font);
+  font: 600 11.5px var(--font);
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -1695,7 +1722,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .kicad-project-sub {
-  font: 400 11px var(--font);
+  font: 400 10px var(--font);
   color: var(--dim-2);
   white-space: nowrap;
   overflow: hidden;
@@ -1704,7 +1731,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .kicad-stats-row {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
 }
 
@@ -1712,30 +1739,30 @@ input[type="range"]::-webkit-slider-thumb {
   flex: 1 1 0;
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  padding: 4px 6px;
+  border-radius: 6px;
+  padding: 2px 4px;
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .kicad-stat-val {
-  font: 600 11.5px var(--mono);
+  font: 600 10.5px var(--mono);
   color: #e2e8f0;
   white-space: nowrap;
 }
 
 .kicad-stat-lbl {
-  font: 400 10px var(--font);
+  font: 400 9.5px var(--font);
   color: var(--dim-2);
   white-space: nowrap;
 }
 
 .kicad-actions-row {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   width: 100%;
 }
 
@@ -1743,9 +1770,9 @@ input[type="range"]::-webkit-slider-thumb {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font: 500 11.5px var(--font);
-  border-radius: 8px;
+  gap: 5px;
+  font: 500 11px var(--font);
+  border-radius: 7px;
   cursor: pointer;
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   border: 1px solid transparent;
@@ -1753,15 +1780,15 @@ input[type="range"]::-webkit-slider-thumb {
 
 .kicad-btn.primary {
   flex: 1 1 auto;
-  height: 28px;
-  background: rgba(47, 101, 184, 0.25);
-  border-color: rgba(47, 101, 184, 0.45);
-  color: #7bb1f8;
+  height: 24px;
+  background: rgba(47, 101, 184, 0.28);
+  border-color: rgba(47, 101, 184, 0.5);
+  color: #93c5fd;
 }
 
 .kicad-btn.primary:hover {
-  background: rgba(47, 101, 184, 0.4);
-  border-color: rgba(47, 101, 184, 0.7);
+  background: rgba(47, 101, 184, 0.45);
+  border-color: rgba(47, 101, 184, 0.8);
   color: #ffffff;
   transform: translateY(-1px);
 }
@@ -1771,8 +1798,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .kicad-btn.secondary {
-  flex: 0 0 28px;
-  height: 28px;
+  flex: 0 0 24px;
+  height: 24px;
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.08);
   color: var(--dim);

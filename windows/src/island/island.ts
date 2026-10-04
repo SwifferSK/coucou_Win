@@ -131,6 +131,11 @@ export class Island {
         };
         if (task.id === "integration_claude") void Bridge.openInVSCode(task.sessionCwd ?? null);
         else if (task.id === "integration_n8n") void Bridge.openN8n();
+        else if (task.id === "integration_kicad") {
+          const data = State.integrations.integration_kicad?.data as Record<string, unknown> | undefined;
+          const projectPath = (data?.projectPath as string) || null;
+          void Bridge.openKiCad(projectPath);
+        }
         else if (urls[task.id]) void Bridge.openUrl(urls[task.id]);
       },
       openUrl: (url) => {
