@@ -452,7 +452,8 @@ export class Island {
   // ── Geometry ────────────────────────────────────────────────────────────────
 
   private targetSize(): { w: number; h: number; r: number } {
-    const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length);
+    const isDiff = State.view === "overview" && Boolean(State.activeDiff);
+    const { w, h } = islandSize(State.mode, State.view, State.chatHistory.length, isDiff);
     const r = State.mode === "expanded" ? EXPANDED_CORNER : ROUNDED_CORNER;
     return { w, h, r };
   }
@@ -746,7 +747,8 @@ export class Island {
   };
 
   private updateBotTargets() {
-    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress);
+    const isDiff = State.view === "overview" && Boolean(State.activeDiff);
+    const p = botPosition(State.mode, State.view, this.height.value, State.uploadProgress, isDiff);
     this.botCx.target = p.cx;
     this.botCy.target = p.cy;
     this.botSize.target = p.diameter / 0.6;

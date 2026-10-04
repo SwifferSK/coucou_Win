@@ -101,6 +101,7 @@ export function islandSize(
   mode: IslandMode,
   view: IslandViewName,
   chatCount = 0,
+  isDiffMode = false,
 ): { w: number; h: number } {
   switch (mode) {
     case "hidden":
@@ -110,6 +111,9 @@ export function islandSize(
     case "compact":
       return { w: COMPACT_W, h: NOTCH_H };
     case "expanded": {
+      if (view === "overview" && isDiffMode) {
+        return { w: EXPANDED_W, h: 220 };
+      }
       const h = view === "prompt" ? chatPromptHeight(chatCount) : VIEW_LAYOUTS[view].height;
       return { w: EXPANDED_W, h };
     }
@@ -129,6 +133,7 @@ export function botPosition(
   view: IslandViewName,
   islandH: number,
   uploadProgress = 0,
+  isDiffMode = false,
 ): BotPlacement {
   switch (mode) {
     case "hidden":
@@ -136,6 +141,9 @@ export function botPosition(
     case "compact":
       return { cx: 40, cy: 16, diameter: 20, opacity: 1 };
     case "expanded": {
+      if (view === "overview" && isDiffMode) {
+        return { cx: 38, cy: 68, diameter: 44, opacity: 1 };
+      }
       const layout = VIEW_LAYOUTS[view];
       if (view === "uploading") {
         return {

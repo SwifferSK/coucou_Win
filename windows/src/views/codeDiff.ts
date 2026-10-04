@@ -4,7 +4,6 @@
 
 import { h, svg } from "./dom";
 import { ICONS } from "./icons";
-import { createMiniBot } from "../mochi/minibots";
 import type { AgentTask, LiveCodeDiff } from "../core/state";
 
 const EXT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -79,9 +78,7 @@ function makeLine(num: number, kind: "ctx" | "add" | "del", content: string): HT
 
 export function buildLiveDiffWorkspace(task: AgentTask, diff: LiveCodeDiff): HTMLElement {
   // ── 1. Left Sidebar ────────────────────────────────────────────────────────
-  const mochiCanvas = createMiniBot(task, 46);
-  
-  // Thought bubble badge (blue circle with 3 white dots)
+  // Thought bubble badge (blue circle with 3 white dots) placed over top-left of Mochi
   const thoughtBadge = h(
     "div",
     { class: "diff-thought-badge" },
@@ -90,7 +87,8 @@ export function buildLiveDiffWorkspace(task: AgentTask, diff: LiveCodeDiff): HTM
     h("span", { class: "diff-thought-dot" }),
   );
 
-  const mochiBox = h("div", { class: "diff-mochi-box" }, mochiCanvas, thoughtBadge);
+  // Mochi placeholder slot (no duplicate canvas; main #bot-canvas floats here)
+  const mochiBox = h("div", { class: "diff-mochi-box" }, thoughtBadge);
 
   let toolLabel = "Claude Code";
   if (task.id === "agent_antigravity") toolLabel = "Antigravity";
@@ -107,7 +105,7 @@ export function buildLiveDiffWorkspace(task: AgentTask, diff: LiveCodeDiff): HTM
 
   // Status steps pipeline (Read -> Edit -> Bash -> Done)
   const stepRead = h("div", { class: "diff-step-item done" },
-    svg(ICONS.checkCircle, 12),
+    svg(ICONS.checkCircle, 13),
     h("span", { text: "Read" }),
   );
 
@@ -118,12 +116,12 @@ export function buildLiveDiffWorkspace(task: AgentTask, diff: LiveCodeDiff): HTM
   );
 
   const stepBash = h("div", { class: "diff-step-item idle" },
-    svg(ICONS.terminal, 11),
+    svg(ICONS.terminal, 12),
     h("span", { text: "Bash" }),
   );
 
   const stepDone = h("div", { class: "diff-step-item idle" },
-    svg(ICONS.checkCircle, 12),
+    svg(ICONS.checkCircle, 13),
     h("span", { text: "Done" }),
   );
 

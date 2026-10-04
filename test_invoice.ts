@@ -3,7 +3,7 @@ import { Item } from './types';
 
 export function calculateTotal(items: Item[]): number {
   const TVA = 0.196;
-  const discount = 0.05;
+  const discount = 0.15;
   const sum = items.reduce((s, i) => s + i.price, 0) * (1 - discount);
   return sum * (1 + TVA);
 }
