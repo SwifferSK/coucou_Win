@@ -129,6 +129,12 @@ export const Bridge = {
       screenX,
       screenY,
     }),
+
+  /** Open project in KiCad EDA */
+  openKiCad: (projectPath?: string | null) => call<void>("open_kicad", { projectPath }),
+
+  /** Open path in file manager (explorer) */
+  revealInFileManager: (path: string) => call<void>("reveal_in_file_manager", { path }),
 };
 
 export interface IntegrationUpdate {

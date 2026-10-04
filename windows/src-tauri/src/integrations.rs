@@ -63,6 +63,7 @@ pub fn set_paused(on: bool) {
 /// Spawns every poller with the macOS delays and intervals.
 pub fn start(app: AppHandle) {
     spawn(app.clone(), "integration_spotify", 1, 2, poll_spotify);
+    spawn(app.clone(), "integration_kicad", 1, 3, poll_kicad);
     spawn(app.clone(), "integration_n8n", 1, 15, poll_n8n);
     spawn(app.clone(), "integration_vercel", 1, 30, poll_vercel);
     spawn(app.clone(), "integration_stripe", 1, 30, poll_stripe);
@@ -107,6 +108,7 @@ where
 /// One-shot refresh from the Refresh buttons in the island.
 pub async fn poll_once(app: AppHandle, id: &str) {
     match id {
+        "integration_kicad" => poll_kicad(app).await,
         "integration_stripe" => poll_stripe(app).await,
         "integration_github" => poll_github(app).await,
         "integration_vercel" => poll_vercel(app).await,
@@ -811,4 +813,47 @@ async fn poll_spotify(app: AppHandle) {
         },
     );
 }
+
+// ── KiCad ────────────────────────────────────────────────────────────────────
+
+async fn poll_kicad(app: AppHandle) {
+    let status = crate::platform::get_kicad_status();
+    let data = match status {
+        Some(info) => json!({
+            "running": info.running,
+            "activeEditor": info.active_editor,
+            "projectName": info.project_name,
+            "projectPath": info.project_path,
+            "projectDir": info.project_dir,
+            "footprints": info.footprints,
+            "nets": info.nets,
+            "symbols": info.symbols,
+            "hasGerber": info.has_gerber,
+            "lastModified": info.last_modified,
+        }),
+        None => json!({
+            "running": false,
+            "activeEditor": "No project found",
+            "projectName": "",
+            "projectPath": "",
+            "projectDir": "",
+            "footprints": 0,
+            "nets": 0,
+            "symbols": 0,
+            "hasGerber": false,
+            "lastModified": 0,
+        }),
+    };
+
+    emit(
+        &app,
+        IntegrationUpdate {
+            id: "integration_kicad",
+            data,
+            error: None,
+            event: None,
+        },
+    );
+}
+
 

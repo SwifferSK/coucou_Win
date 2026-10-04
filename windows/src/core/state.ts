@@ -96,6 +96,7 @@ export const PILL_CATALOG: PillDefinition[] = [
   { id: "integration_calcom", name: "Cal.com", color: "#C9956A", category: "service", subtitle: "Integration", source: "n8n" },
   { id: "integration_stripe", name: "Stripe", color: "#0570DE", category: "service", subtitle: "Integration", source: "n8n" },
   { id: "integration_spotify", name: "Spotify", color: "#1DB954", category: "service", subtitle: "Music", source: "n8n" },
+  { id: "integration_kicad", name: "KiCad", color: "#2F65B8", category: "service", subtitle: "EDA", source: "n8n" },
 ];
 
 export const WORKSPACE_PILL_IDS = [

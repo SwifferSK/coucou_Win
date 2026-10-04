@@ -414,6 +414,11 @@ fn log_line(message: String) {
     log::line(format!("ui  {message}"));
 }
 
+#[tauri::command]
+fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<platform::WindowContextInfo> {
+    platform::get_window_at_cursor(screen_x, screen_y)
+}
+
 // ── Settings window ───────────────────────────────────────────────────────────
 
 /// WebView2 allows exactly one browser environment per app, and its options are
@@ -481,8 +486,13 @@ fn open_settings_window(app: AppHandle) {
 }
 
 #[tauri::command]
-fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<platform::WindowContextInfo> {
-    platform::get_window_at_cursor(screen_x, screen_y)
+fn open_kicad(project_path: Option<String>) {
+    platform::open_kicad(project_path.as_deref());
+}
+
+#[tauri::command]
+fn reveal_in_file_manager(path: String) {
+    platform::reveal_folder(&path);
 }
 
 pub fn run() {
@@ -542,6 +552,8 @@ pub fn run() {
             set_paused,
             media_control,
             get_window_at_cursor,
+            open_kicad,
+            reveal_in_file_manager,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

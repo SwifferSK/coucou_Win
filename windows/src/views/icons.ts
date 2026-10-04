@@ -54,5 +54,11 @@ export const ICONS = {
   terminal: "M4 17l6-5-6-5v10zm8 2h8v-2h-8v2z",
   // check.circle.fill
   checkCircle: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+  // kicad / chip icon
+  kicad: "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v8h2v-3h4v3h2V8h-2v3h-4V8H8z",
+  // cpu / microchip
+  cpu: "M9 3v2h6V3h2v2h2a2 2 0 0 1 2 2v2h2v2h-2v2h2v2h-2v2a2 2 0 0 1-2 2h-2v2h-2v-2H9v2H7v-2H5a2 2 0 0 1-2-2v-2H1v-2h2v-2H1V9h2V7a2 2 0 0 1 2-2h2V3h2zm8 4H7v10h10V7z",
+  // folder
+  folder: "M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z",
 } as const;
 

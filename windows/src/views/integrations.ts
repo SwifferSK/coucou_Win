@@ -439,9 +439,83 @@ function spotifyCard(): HTMLElement {
   return h("div", { class: "int-card spotify-card" }, head, trackBox);
 }
 
+function kicadCard(): HTMLElement {
+  const data = get("integration_kicad");
+  const isRunning = Boolean(data.running);
+  const activeEditor = (data.activeEditor as string) || (isRunning ? "KiCad Active" : "Ready");
+  const projectName = (data.projectName as string) || "No project loaded";
+  const projectPath = (data.projectPath as string) || "";
+  const projectDir = (data.projectDir as string) || "";
+  const footprints = Number(data.footprints ?? 0);
+  const nets = Number(data.nets ?? 0);
+  const symbols = Number(data.symbols ?? 0);
+  const hasGerber = Boolean(data.hasGerber);
+  const lastModified = Number(data.lastModified ?? 0);
+
+  const statusDotEl = dot(isRunning ? "#22C55E" : "#8E939C", 6);
+  const head = header(
+    "#2F65B8",
+    "KiCad",
+    isRunning ? activeEditor : "EDA Project",
+    h("div", { class: "kicad-head-badge" }, statusDotEl, h("span", { text: isRunning ? "Running" : "Idle" })),
+  );
+
+  const projectBox = h(
+    "div",
+    { class: "kicad-project-box" },
+    h("div", { class: "kicad-icon-badge" }, svg(ICONS.cpu, 14)),
+    h("div", { class: "kicad-project-meta" },
+      h("div", { class: "kicad-project-title", text: projectName }),
+      h("div", { class: "kicad-project-sub", text: lastModified > 0 ? `Edited ${timeAgo(lastModified)}` : "KiCad PCB & Schematic" }),
+    ),
+  );
+
+  const statsRow = h(
+    "div",
+    { class: "kicad-stats-row" },
+    h("div", { class: "kicad-stat-pill" },
+      h("span", { class: "kicad-stat-val", text: String(footprints) }),
+      h("span", { class: "kicad-stat-lbl", text: "components" }),
+    ),
+    h("div", { class: "kicad-stat-pill" },
+      h("span", { class: "kicad-stat-val", text: String(nets) }),
+      h("span", { class: "kicad-stat-lbl", text: "nets" }),
+    ),
+    h("div", { class: "kicad-stat-pill" },
+      h("span", { class: "kicad-stat-val", text: hasGerber ? "✓ Gerber" : `${symbols} Sym` }),
+    ),
+  );
+
+  const openBtn = h(
+    "button",
+    {
+      class: "kicad-btn primary",
+      onclick: () => void Bridge.openKiCad(projectPath || null),
+    },
+    svg(ICONS.kicad, 12),
+    h("span", { text: "Open in KiCad" }),
+  );
+
+  const folderBtn = h(
+    "button",
+    {
+      class: "kicad-btn secondary",
+      title: "Open Folder",
+      onclick: () => {
+        if (projectDir) void Bridge.revealInFileManager(projectDir);
+      },
+    },
+    svg(ICONS.folder, 12),
+  );
+
+  const actionRow = h("div", { class: "kicad-actions-row" }, openBtn, folderBtn);
+
+  return h("div", { class: "int-card kicad-card" }, head, projectBox, statsRow, actionRow);
+}
+
 /** True when this integration has data worth showing instead of the idle card. */
 export function hasIntegrationData(id: string): boolean {
-  if (id === "integration_spotify") return true;
+  if (id === "integration_spotify" || id === "integration_kicad") return true;
   const info = State.integrations[id];
   if (!info || info.error) return false;
   switch (id) {
@@ -465,6 +539,9 @@ export function hasIntegrationData(id: string): boolean {
 export function renderIntegrationCard(task: AgentTask, hooks: IntegrationCardHooks): HTMLElement {
   if (task.id === "integration_spotify") {
     return spotifyCard();
+  }
+  if (task.id === "integration_kicad") {
+    return kicadCard();
   }
   if (task.id === "integration_n8n") {
     const hasActivity = task.steps.length > 0 && (task.state === "finished" || task.state === "error");

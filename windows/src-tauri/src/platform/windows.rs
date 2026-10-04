@@ -409,4 +409,217 @@ pub fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<WindowContex
     }
 }
 
+// ── KiCad EDA Integration ───────────────────────────────────────────────────
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct KiCadProjectInfo {
+    pub running: bool,
+    pub active_editor: String,
+    pub project_name: String,
+    pub project_path: String,
+    pub project_dir: String,
+    pub footprints: usize,
+    pub nets: usize,
+    pub symbols: usize,
+    pub has_gerber: bool,
+    pub last_modified: u64,
+}
+
+pub fn get_kicad_status() -> Option<KiCadProjectInfo> {
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, GetWindowThreadProcessId};
+
+    struct WinState {
+        running: bool,
+        editor: String,
+    }
+
+    let mut win_state = WinState {
+        running: false,
+        editor: String::new(),
+    };
+
+    unsafe extern "system" fn enum_kicad_win(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = &mut *(lparam.0 as *mut WinState);
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            return true.into();
+        }
+
+        if let Ok(proc) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            let mut name_buf = [0u16; 260];
+            let mut size = name_buf.len() as u32;
+            if windows::Win32::System::Threading::QueryFullProcessImageNameW(
+                proc,
+                windows::Win32::System::Threading::PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(name_buf.as_mut_ptr()),
+                &mut size,
+            ).is_ok() {
+                let full_path = String::from_utf16_lossy(&name_buf[..size as usize]).to_lowercase();
+                if full_path.contains("kicad.exe") || full_path.contains("eeschema.exe") || full_path.contains("pcbnew.exe") {
+                    state.running = true;
+                    let mut title_buf = [0u16; 512];
+                    let len = GetWindowTextW(hwnd, &mut title_buf);
+                    if len > 0 {
+                        let text = String::from_utf16_lossy(&title_buf[..len as usize]);
+                        if text.contains("PCB Editor") || text.contains("pcbnew") {
+                            state.editor = "PCB Editor (Pcbnew)".to_string();
+                        } else if text.contains("Schematic Editor") || text.contains("eeschema") {
+                            state.editor = "Schematic Editor (Eeschema)".to_string();
+                        } else if state.editor.is_empty() && !text.is_empty() && text != "Default IME" && text != "MSCTFIME UI" {
+                            state.editor = "KiCad Manager".to_string();
+                        }
+                    }
+                }
+            }
+            let _ = CloseHandle(proc);
+        }
+        true.into()
+    }
+
+    unsafe {
+        let _ = EnumWindows(Some(enum_kicad_win), LPARAM(&mut win_state as *mut _ as isize));
+    }
+
+    // 2. Find recent/open .kicad_pro file from %APPDATA%\kicad\
+    let appdata = std::env::var_os("APPDATA")?;
+    let kicad_base = PathBuf::from(appdata).join("kicad");
+    if !kicad_base.is_dir() {
+        return None;
+    }
+
+    let versions = ["10.0", "9.0", "8.0", "7.0"];
+    let mut found_pro_path: Option<PathBuf> = None;
+
+    for ver in versions {
+        let cfg_file = kicad_base.join(ver).join("kicad.json");
+        if let Ok(content) = std::fs::read_to_string(&cfg_file) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                // Check open_projects first
+                if let Some(open_arr) = json.pointer("/system/open_projects").and_then(|v| v.as_array()) {
+                    for item in open_arr {
+                        if let Some(path_str) = item.as_str() {
+                            let pb = PathBuf::from(path_str);
+                            if pb.is_file() {
+                                found_pro_path = Some(pb);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if found_pro_path.is_none() {
+                    if let Some(hist_arr) = json.pointer("/system/file_history").and_then(|v| v.as_array()) {
+                        for item in hist_arr {
+                            if let Some(path_str) = item.as_str() {
+                                let pb = PathBuf::from(path_str);
+                                if pb.is_file() {
+                                    found_pro_path = Some(pb);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if found_pro_path.is_some() {
+            break;
+        }
+    }
+
+    let pro_path = found_pro_path?;
+    let project_dir = pro_path.parent()?.to_path_buf();
+    let project_name = pro_path.file_stem()?.to_string_lossy().to_string();
+
+    let mut footprints = 0;
+    let mut nets = 0;
+    let mut symbols = 0;
+    let mut last_modified = 0u64;
+
+    // Parse .kicad_pcb
+    let pcb_path = project_dir.join(format!("{project_name}.kicad_pcb"));
+    if let Ok(content) = std::fs::read_to_string(&pcb_path) {
+        footprints = content.matches("(footprint ").count();
+        nets = content.matches("(net ").count();
+        if let Ok(meta) = std::fs::metadata(&pcb_path) {
+            if let Ok(mtime) = meta.modified() {
+                if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                    last_modified = dur.as_millis() as u64;
+                }
+            }
+        }
+    }
+
+    // Parse .kicad_sch
+    let sch_path = project_dir.join(format!("{project_name}.kicad_sch"));
+    if let Ok(content) = std::fs::read_to_string(&sch_path) {
+        symbols = content.matches("(symbol ").count();
+        if last_modified == 0 {
+            if let Ok(meta) = std::fs::metadata(&sch_path) {
+                if let Ok(mtime) = meta.modified() {
+                    if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+                        last_modified = dur.as_millis() as u64;
+                    }
+                }
+            }
+        }
+    }
+
+    let has_gerber = project_dir.join("Gerber").is_dir()
+        || project_dir.join("gerber").is_dir()
+        || project_dir.join("gerbers").is_dir();
+
+    let active_editor = if win_state.running {
+        if !win_state.editor.is_empty() {
+            win_state.editor
+        } else {
+            "KiCad".to_string()
+        }
+    } else {
+        "Ready".to_string()
+    };
+
+    Some(KiCadProjectInfo {
+        running: win_state.running,
+        active_editor,
+        project_name,
+        project_path: pro_path.to_string_lossy().to_string(),
+        project_dir: project_dir.to_string_lossy().to_string(),
+        footprints,
+        nets,
+        symbols,
+        has_gerber,
+        last_modified,
+    })
+}
+
+pub fn open_kicad(project_path: Option<&str>) {
+    let mut cmd = Command::new("kicad");
+    if let Some(path) = project_path {
+        cmd.arg(path);
+    }
+    let res = no_console(&mut cmd).spawn();
+    if res.is_err() {
+        // Fallback to default Program Files path
+        let candidates = [
+            r"C:\Program Files\KiCad\9.0\bin\kicad.exe",
+            r"C:\Program Files\KiCad\10.0\bin\kicad.exe",
+            r"C:\Program Files\KiCad\8.0\bin\kicad.exe",
+            r"C:\Program Files\KiCad\7.0\bin\kicad.exe",
+        ];
+        for exe in candidates {
+            if std::path::Path::new(exe).is_file() {
+                let mut fallback_cmd = Command::new(exe);
+                if let Some(path) = project_path {
+                    fallback_cmd.arg(path);
+                }
+                let _ = no_console(&mut fallback_cmd).spawn();
+                break;
+            }
+        }
+    }
+}
+
+
 

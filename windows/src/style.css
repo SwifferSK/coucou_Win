@@ -1627,6 +1627,168 @@ input[type="range"]::-webkit-slider-thumb {
   100% { height: 14px; opacity: 1; }
 }
 
+/* ── KiCad EDA Card ────────────────────────────────────────────────────── */
+
+.kicad-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.kicad-head-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font: 500 10.5px var(--font);
+  color: var(--dim);
+}
+
+.kicad-project-box {
+  background: radial-gradient(160px 100px at 0% 0%, rgba(47, 101, 184, 0.22), transparent),
+              rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(47, 101, 184, 0.25);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.kicad-project-box:hover {
+  border-color: rgba(47, 101, 184, 0.5);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.kicad-icon-badge {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(47, 101, 184, 0.2);
+  border: 1px solid rgba(47, 101, 184, 0.35);
+  color: #5c9df5;
+  flex-shrink: 0;
+}
+
+.kicad-project-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 1px;
+}
+
+.kicad-project-title {
+  font: 600 12.5px var(--font);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+.kicad-project-sub {
+  font: 400 11px var(--font);
+  color: var(--dim-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kicad-stats-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.kicad-stat-pill {
+  flex: 1 1 0;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kicad-stat-val {
+  font: 600 11.5px var(--mono);
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.kicad-stat-lbl {
+  font: 400 10px var(--font);
+  color: var(--dim-2);
+  white-space: nowrap;
+}
+
+.kicad-actions-row {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.kicad-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: 500 11.5px var(--font);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.kicad-btn.primary {
+  flex: 1 1 auto;
+  height: 28px;
+  background: rgba(47, 101, 184, 0.25);
+  border-color: rgba(47, 101, 184, 0.45);
+  color: #7bb1f8;
+}
+
+.kicad-btn.primary:hover {
+  background: rgba(47, 101, 184, 0.4);
+  border-color: rgba(47, 101, 184, 0.7);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.kicad-btn.primary:active {
+  transform: translateY(0);
+}
+
+.kicad-btn.secondary {
+  flex: 0 0 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--dim);
+}
+
+.kicad-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.kicad-btn.secondary:active {
+  transform: translateY(0);
+}
+
 /* ── Live Code Diff Workspace ───────────────────────────────────────────── */
 
 .diff-workspace-container {
