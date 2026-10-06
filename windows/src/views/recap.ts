@@ -8,10 +8,12 @@ import { Sound } from "../core/sound";
 import type { ViewActions, ViewHost } from "./views";
 
 export function buildWeeklyRecap(actions: ViewActions): ViewHost {
-  const root = h("div", {
+  const card = h("div", {
     class: "card wash",
     style: `--wash:${washRGBA("indigo")};display:flex;flex-direction:column;justify-content:space-between;padding:10px 14px 10px 116px;box-sizing:border-box;width:100%;height:100%;position:relative`,
   });
+
+  const el = h("div", { class: "view recap-view" }, card);
 
   let summary: WeeklySummary | null = null;
 
@@ -31,7 +33,7 @@ export function buildWeeklyRecap(actions: ViewActions): ViewHost {
 
   function closeRecap() {
     // Remove any share modal if open
-    document.querySelectorAll(".recap-share-modal").forEach((el) => el.remove());
+    document.querySelectorAll(".recap-share-modal").forEach((m) => m.remove());
     actions.setView("overview");
     actions.collapse();
     Sound.play("pop");
@@ -105,7 +107,7 @@ export function buildWeeklyRecap(actions: ViewActions): ViewHost {
 
   function render() {
     summary = RecapStore.weeklySummary();
-    root.innerHTML = "";
+    card.innerHTML = "";
 
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const range = `${monthNames[summary.weekStart.getMonth()]} ${summary.weekStart.getDate()} – ${monthNames[summary.weekEnd.getMonth()]} ${summary.weekEnd.getDate()}`;
@@ -154,13 +156,13 @@ export function buildWeeklyRecap(actions: ViewActions): ViewHost {
       }),
     );
 
-    root.append(head, statsRow, actionsRow);
+    card.append(head, statsRow, actionsRow);
   }
 
   render();
 
   return {
-    el: root,
+    el,
     sync: render,
   };
 }
