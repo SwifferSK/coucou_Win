@@ -1,11 +1,39 @@
 # Changelog
 
+## 0.1.9 — October 6, 2026
+
+- **More Coding Agents**: Native support and pills for GitHub Copilot CLI, OpenCode, Muse Code, and Amp in addition to Claude Code, Antigravity, Gemini CLI, Cursor, and Codex.
+- **Weekly Recap**: Spotify Wrapped-style weekly coding recap card and poster modal tracking coding time, sessions, files changed, +lines/-lines, commands run, and questions answered.
+- **MSI Installer**: Added MSI target alongside NSIS installer for enterprise deployment and Windows Defender friendliness.
+
+## 0.1.8 — October 5, 2026
+
+- **Extended Integrations & Parity**: Full Windows parity for Live Activity tracking, session metrics, diff inspections, and multi-agent coordination.
+- **New Greeting Score**: High-fidelity sound and particle bursts for Mochi's launch greeting.
+
+## 0.1.7 — October 4, 2026
+
+- **Global Keyboard Shortcuts (Win32)**:
+  - `Ctrl+Alt+Space`: Open AI chat
+  - `Ctrl+Alt+A`: Jump to waiting permission or question
+  - `Ctrl+Alt+T`: Bring active terminal/editor forward
+  - `Ctrl+Alt+]` / `Ctrl+Alt+[`: Switch next / previous pill
+  - `Ctrl+Alt+M`: Mute / unmute Mochi
+  - `Ctrl+Alt+D`: Toggle desktop companion (Mochi on desktop)
+  - `Ctrl+Alt+G`: Open wardrobe
+  - `Ctrl+Alt+W`: Attach front window to chat
+  - `Ctrl+Shift+N`: Expand / collapse Dynamic Island
+- **Island-Local Shortcuts**: `Ctrl+→`/`Ctrl+←` and `Ctrl+1–9` to switch pills, `Ctrl+E` for live diff, `Ctrl+K` for new chat, `Ctrl+P` to pin island, `Escape` to close/back.
+- **Settings → Shortcuts**: Dedicated tab in settings with full list of global and island-local shortcuts.
+
+## 0.1.6 — October 4, 2026
+
+- **Mochi on the Desktop**: Drag Mochi out of the notch onto the desktop as an interactive floating companion with eye tracking, pokes, sleep mode, wardrobe access, and double-click fly-home.
+
 ## 0.1.5 — October 4, 2026
 
-- **Mochi Wardrobe & Outfits**: Mochi now has 12 unlockable outfits (Party Hat, Beanie, Crown, Sunglasses, Round Glasses, Bow, Scarf, Witch Hat, Pumpkin, Santa Hat, Bunny Ears, and Seasonal Auto mode) with 3D projection, depth sorting, dynamic spring physics (squash impulses, yaw/pitch inertia, centrifugal drag), and full wardrobe selection view. Right-click Mochi or switch views to customize!
-- **Desktop Mochi**: Drag Mochi out of the island onto your desktop as an interactive companion with eye tracking, pokes, sleep mode, double-click fly-home, and notification alerts.
+- **Mochi Wardrobe & Outfits**: Mochi has 12 unlockable outfits (Party Hat, Beanie, Crown, Sunglasses, Round Glasses, Bow, Scarf, Witch Hat, Pumpkin, Santa Hat, Bunny Ears, Seasonal Auto) with 3D projection, depth sorting, and dynamic spring physics.
 - **Greeting v2**: Enhanced launch greeting animation with fall-in bounce, lateral travel, wave oscillation, streak & burst particles, and greeting sound effect with smooth fade-out.
-- **Windows parity**: Full feature parity between macOS and Windows for versions 0.1.1 through 0.1.5.
 
 ## 0.1.4 — October 3, 2026
 

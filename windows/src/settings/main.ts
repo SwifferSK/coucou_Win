@@ -8,7 +8,7 @@ import { h, clear } from "../views/dom";
 
 let settings: Settings = { ...DEFAULT_SETTINGS };
 let version = "";
-let currentTab: "general" | "pills" | "agents" | "chat" | "services" = "general";
+let currentTab: "general" | "shortcuts" | "pills" | "agents" | "chat" | "services" = "general";
 
 const root = document.getElementById("settings-root")!;
 
@@ -234,6 +234,10 @@ function renderGeneralTab(): HTMLElement {
       h("div", { class: "row" },
         h("label", { text: "Display" }),
         screen,
+      ),
+      h("div", { class: "row" },
+        h("label", { text: "Weekly recap" }),
+        h("span", { class: "hint", text: "Automatic summary of coding time, diffs & tools every week" }),
       ),
       h("div", { class: "row" },
         h("label", { text: "Launch on startup" }),
@@ -615,6 +619,73 @@ function renderServicesTab(present: Record<string, boolean>): HTMLElement {
   return h("div", { class: "tab-content" }, list);
 }
 
+// ── Tab: Shortcuts (Coucou 0.1.7) ──────────────────────────────────────────
+
+function renderShortcutsTab(): HTMLElement {
+  const globalShortcuts = [
+    { key: "Ctrl + Alt + Space", label: "Open Chat", desc: "Open the AI chat view in the island" },
+    { key: "Ctrl + Alt + A", label: "Jump to Alert", desc: "Jump to a waiting permission approval or question" },
+    { key: "Ctrl + Alt + T", label: "Focus Terminal", desc: "Bring your active coding editor / terminal forward" },
+    { key: "Ctrl + Alt + ]", label: "Next Pill", desc: "Switch to next active pill" },
+    { key: "Ctrl + Alt + [", label: "Previous Pill", desc: "Switch to previous active pill" },
+    { key: "Ctrl + Alt + M", label: "Mute / Unmute", desc: "Toggle Mochi sound effects" },
+    { key: "Ctrl + Alt + D", label: "Desktop Mochi", desc: "Launch or recall Mochi to desktop companion" },
+    { key: "Ctrl + Alt + G", label: "Open Wardrobe", desc: "Open Mochi's wardrobe & outfits selection" },
+    { key: "Ctrl + Alt + W", label: "Attach Window", desc: "Attach the active window to the chat context" },
+    { key: "Ctrl + Shift + N", label: "Toggle Island", desc: "Expand or collapse the Dynamic Island" },
+  ];
+
+  const localShortcuts = [
+    { key: "Ctrl + → / Ctrl + ←", label: "Next / previous pill" },
+    { key: "Ctrl + 1 – Ctrl + 9", label: "Switch to pill by number (1 to 9)" },
+    { key: "Ctrl + E", label: "Open / close live code diff viewer" },
+    { key: "Ctrl + K", label: "Start new conversation in chat" },
+    { key: "Ctrl + P", label: "Pin / unpin the island (keep open)" },
+    { key: "Ctrl + ,", label: "Open Settings window" },
+    { key: "Ctrl + Enter", label: "Send chat prompt" },
+    { key: "Escape", label: "Close island or return to overview" },
+  ];
+
+  const globalRows = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
+  for (const item of globalShortcuts) {
+    globalRows.append(
+      h("div", { class: "row", style: "align-items:center;justify-content:space-between" },
+        h("div", { style: "display:flex;flex-direction:column;gap:2px" },
+          h("div", { style: "font-weight:600;font-size:13px;color:#f1f2f4", text: item.label }),
+          h("div", { class: "hint", text: item.desc }),
+        ),
+        h("div", { style: "display:flex;align-items:center;gap:8px" },
+          h("span", { class: "badge", style: "background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);padding:3px 8px;border-radius:6px;font-family:monospace;font-size:12px;font-weight:600", text: item.key }),
+          h("span", { style: "font-size:10px;color:#22c55e;font-weight:600;background:rgba(34,197,94,0.15);padding:2px 6px;border-radius:10px", text: "ACTIVE" }),
+        ),
+      ),
+    );
+  }
+
+  const localRows = h("div", { style: "display:flex;flex-direction:column;gap:6px" });
+  for (const item of localShortcuts) {
+    localRows.append(
+      h("div", { class: "row", style: "align-items:center;justify-content:space-between" },
+        h("span", { style: "font-family:monospace;font-size:12px;color:#f1f2f4;background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px", text: item.key }),
+        h("span", { style: "font-size:12px;color:#8e939c", text: item.label }),
+      ),
+    );
+  }
+
+  return h(
+    "div",
+    { class: "tab-content" },
+    h("section", {},
+      h("h2", {}, h("span", { text: "Global Shortcuts (Work from any app)" })),
+      globalRows,
+    ),
+    h("section", {},
+      h("h2", {}, h("span", { text: "Island Shortcuts (Active when island is focused)" })),
+      localRows,
+    ),
+  );
+}
+
 // ── Main Page Render ─────────────────────────────────────────────────────────
 
 async function render() {
@@ -645,6 +716,7 @@ async function render() {
   // Tab navigation
   const tabs = [
     { id: "general", label: "General" },
+    { id: "shortcuts", label: "Shortcuts" },
     { id: "pills", label: "Active Pills" },
     { id: "agents", label: "Agents & Hooks" },
     { id: "chat", label: "Chat AI" },
@@ -667,6 +739,8 @@ async function render() {
   const content = h("div", { style: "display:flex;flex-direction:column;gap:16px" });
   if (currentTab === "general") {
     content.append(renderGeneralTab());
+  } else if (currentTab === "shortcuts") {
+    content.append(renderShortcutsTab());
   } else if (currentTab === "pills") {
     content.append(renderPillsTab());
   } else if (currentTab === "agents") {

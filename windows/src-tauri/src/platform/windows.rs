@@ -237,6 +237,64 @@ pub fn set_activating(win: &WebviewWindow, activating: bool) {
 /// Click-through here is the poll's WS_EX_TRANSPARENT toggle, not a region.
 pub fn set_input_region(_win: &WebviewWindow, _rect: Option<(f64, f64, f64, f64)>) {}
 
+// ── Global Keyboard Shortcuts ──────────────────────────────────────────────────
+
+/// Spawns a dedicated thread with a Win32 message loop to handle global hotkeys.
+/// Emits `global-shortcut` with action names matching Coucou 0.1.7:
+/// - open-chat: Ctrl+Alt+Space
+/// - alert: Ctrl+Alt+A
+/// - terminal: Ctrl+Alt+T
+/// - next-pill: Ctrl+Alt+]
+/// - prev-pill: Ctrl+Alt+[
+/// - mute: Ctrl+Alt+M
+/// - desktop-mochi: Ctrl+Alt+D
+/// - wardrobe: Ctrl+Alt+G
+/// - attach-window: Ctrl+Alt+W
+/// - toggle-island: Ctrl+Shift+N
+pub fn spawn_global_hotkeys(app: AppHandle) {
+    std::thread::spawn(move || {
+        use ::windows::Win32::UI::Input::KeyboardAndMouse::{
+            RegisterHotKey, MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_NOREPEAT,
+            VK_SPACE, VK_OEM_4, VK_OEM_6,
+        };
+        use ::windows::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+        use tauri::Emitter;
+
+        let shortcuts: &[(i32, u32, u32, &str)] = &[
+            (1, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, VK_SPACE.0 as u32, "open-chat"),
+            (2, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'A' as u32, "alert"),
+            (3, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'T' as u32, "terminal"),
+            (4, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, VK_OEM_6.0 as u32, "next-pill"),
+            (5, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, VK_OEM_4.0 as u32, "prev-pill"),
+            (6, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'M' as u32, "mute"),
+            (7, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'D' as u32, "desktop-mochi"),
+            (8, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'G' as u32, "wardrobe"),
+            (9, (MOD_CONTROL | MOD_ALT | MOD_NOREPEAT).0, 'W' as u32, "attach-window"),
+            (10, (MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT).0, 'N' as u32, "toggle-island"),
+        ];
+
+        for (id, mods, vk, _) in shortcuts {
+            unsafe {
+                let _ = RegisterHotKey(None, *id, ::windows::Win32::UI::Input::KeyboardAndMouse::HOT_KEY_MODIFIERS(*mods), *vk);
+            }
+        }
+
+        let mut msg = MSG::default();
+        loop {
+            let res = unsafe { GetMessageW(&mut msg, None, 0, 0) };
+            if !res.as_bool() {
+                break;
+            }
+            if msg.message == WM_HOTKEY {
+                let id = msg.wParam.0 as i32;
+                if let Some((_, _, _, action)) = shortcuts.iter().find(|(sid, _, _, _)| *sid == id) {
+                    let _ = app.emit("global-shortcut", *action);
+                }
+            }
+        }
+    });
+}
+
 // ── Spotify & Media Controls ──────────────────────────────────────────────────
 
 #[derive(Serialize, Clone, Debug, Default)]

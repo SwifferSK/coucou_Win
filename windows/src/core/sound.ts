@@ -126,6 +126,11 @@ class SoundEngine {
       this.activeSources.delete(name);
     }, duration * 1000);
   }
+
+  toggleMute(): boolean {
+    this.enabled = !this.enabled;
+    return !this.enabled;
+  }
 }
 
 export const Sound = new SoundEngine();

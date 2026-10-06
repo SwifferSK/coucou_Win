@@ -57,13 +57,17 @@ fn main() {
     }
 
     let default_exit = |event_name: &str| -> ! {
-        if agent == "antigravity" || agent == "gemini" {
+        if agent == "antigravity" || agent == "gemini" || agent == "muse" {
             let mut out = std::io::stdout();
             if event_name == "PreToolUse" || event_name == "BeforeTool" {
                 let _ = writeln!(out, r#"{{"decision":"allow"}}"#);
             } else {
                 let _ = writeln!(out, "{{}}");
             }
+            let _ = out.flush();
+        } else if agent == "copilot" {
+            let mut out = std::io::stdout();
+            let _ = writeln!(out, r#"{{"permissionDecision":"ask"}}"#);
             let _ = out.flush();
         }
         std::process::exit(0);
@@ -94,15 +98,21 @@ fn main() {
         }
     }
 
-    // Antigravity and Gemini CLI expect a JSON object on stdout (empty = no decision).
-    if !answered && (agent == "antigravity" || agent == "gemini") {
-        let mut out = std::io::stdout();
-        if event == "PreToolUse" || arg_event == "BeforeTool" || arg_event == "PreToolUse" {
-            let _ = writeln!(out, r#"{{"decision":"allow"}}"#);
-        } else {
-            let _ = writeln!(out, "{{}}");
+    // Agent fallbacks when no answer or Coucou unreachable
+    if !answered {
+        if agent == "antigravity" || agent == "gemini" || agent == "muse" {
+            let mut out = std::io::stdout();
+            if event == "PreToolUse" || arg_event == "BeforeTool" || arg_event == "PreToolUse" {
+                let _ = writeln!(out, r#"{{"decision":"allow"}}"#);
+            } else {
+                let _ = writeln!(out, "{{}}");
+            }
+            let _ = out.flush();
+        } else if agent == "copilot" {
+            let mut out = std::io::stdout();
+            let _ = writeln!(out, r#"{{"permissionDecision":"ask"}}"#);
+            let _ = out.flush();
         }
-        let _ = out.flush();
     }
 
     std::process::exit(0);
@@ -121,6 +131,12 @@ fn decision_json(agent: &str, decision: &str) -> Option<String> {
         match dec {
             "allow" | "always" => Some(r#"{"decision":"allow","behavior":"allow"}"#.to_string()),
             "deny" => Some(r#"{"decision":"deny","behavior":"deny","message":"Denied from Coucou"}"#.to_string()),
+            _ => None,
+        }
+    } else if agent == "copilot" || agent == "muse" {
+        match dec {
+            "allow" | "always" => Some(r#"{"permissionDecision":"allow"}"#.to_string()),
+            "deny" => Some(r#"{"permissionDecision":"deny"}"#.to_string()),
             _ => None,
         }
     } else {

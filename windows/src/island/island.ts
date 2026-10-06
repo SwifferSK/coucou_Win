@@ -624,17 +624,119 @@ export class Island {
     });
 
     window.addEventListener("keydown", (e) => {
+      State.lastActivity = performance.now();
+      const ctrlOrMeta = e.ctrlKey || e.metaKey;
+
       if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) {
-        if (State.view === "wardrobe") {
+        if (State.view === "wardrobe" || State.view === "recap") {
           this.setView("overview");
+        } else if (State.activeDiff) {
+          State.activeDiff = null;
+          State.notify();
         } else {
           this.collapse();
         }
+        e.preventDefault();
+        return;
       }
-      State.lastActivity = performance.now();
+
+      // Island-local shortcuts (Coucou 0.1.7)
+      if (ctrlOrMeta && (e.key === "ArrowRight" || e.key === "]")) {
+        this.cyclePills(1);
+        e.preventDefault();
+      } else if (ctrlOrMeta && (e.key === "ArrowLeft" || e.key === "[")) {
+        this.cyclePills(-1);
+        e.preventDefault();
+      } else if (ctrlOrMeta && e.key >= "1" && e.key <= "9") {
+        this.selectPillIndex(parseInt(e.key) - 1);
+        e.preventDefault();
+      } else if (ctrlOrMeta && (e.key === "k" || e.key === "K")) {
+        if (State.mode !== "expanded") this.fsm.click();
+        State.promptContext = null;
+        this.setView("prompt");
+        e.preventDefault();
+      } else if (ctrlOrMeta && (e.key === "p" || e.key === "P")) {
+        State.isPinned = !State.isPinned;
+        Sound.play(State.isPinned ? "approve" : "pop");
+        State.notify();
+        e.preventDefault();
+      } else if (ctrlOrMeta && (e.key === "e" || e.key === "E")) {
+        if (State.activeDiff) {
+          State.activeDiff = null;
+          State.notify();
+        }
+        e.preventDefault();
+      } else if (ctrlOrMeta && e.key === ",") {
+        void Bridge.openSettingsWindow();
+        e.preventDefault();
+      }
     });
 
     void onDragDrop((e) => this.onDragDrop(e));
+
+    // Global keyboard shortcuts (Coucou 0.1.7 Win32 hotkeys)
+    const onGlobalShortcut = (action: string) => {
+      switch (action) {
+        case "open-chat":
+          if (State.mode !== "expanded") this.fsm.click();
+          this.setView("prompt");
+          Sound.play("peek");
+          break;
+        case "alert":
+          if (State.mode !== "expanded") this.fsm.click();
+          this.setView("overview");
+          Sound.play("peek");
+          break;
+        case "terminal":
+          if (State.focusTask?.sessionCwd) {
+            void Bridge.openInVSCode(State.focusTask.sessionCwd);
+          }
+          break;
+        case "next-pill":
+          if (State.mode === "hidden") this.fsm.mouseEntered();
+          this.cyclePills(1);
+          break;
+        case "prev-pill":
+          if (State.mode === "hidden") this.fsm.mouseEntered();
+          this.cyclePills(-1);
+          break;
+        case "mute": {
+          const muted = Sound.toggleMute();
+          this.engine.triggerEmote(muted ? "annoyed" : "happy");
+          break;
+        }
+        case "desktop-mochi":
+          void Bridge.openDesktopMochi(window.screen.width / 2 - 60, window.screen.height / 2 - 60);
+          Sound.play("pop");
+          break;
+        case "wardrobe":
+          if (State.mode !== "expanded") this.fsm.click();
+          this.setView(State.view === "wardrobe" ? "overview" : "wardrobe");
+          break;
+        case "attach-window":
+          void Bridge.getWindowAtCursor(Math.round(State.mouse.x), Math.round(State.mouse.y)).then((win) => {
+            if (win && (win.appName || win.title)) {
+              State.promptContext = { kind: "window", appName: win.appName, title: win.title, url: win.url };
+              if (State.mode !== "expanded") this.fsm.click();
+              this.setView("prompt");
+              Sound.play("approve");
+              this.engine.triggerEmote("happy");
+              State.notify();
+            }
+          });
+          break;
+        case "toggle-island":
+          if (State.mode === "expanded") {
+            this.collapse();
+          } else {
+            this.fsm.mouseEntered();
+            this.fsm.click();
+          }
+          break;
+      }
+    };
+
+    void listen<string>("global-shortcut", (e) => onGlobalShortcut(e.payload));
 
     // Listen to Desktop Mochi events
     const onWardrobe = () => {
@@ -662,6 +764,23 @@ export class Island {
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
     if (!IS_TAURI) this.followPageCursor();
+  }
+
+  private cyclePills(delta: number) {
+    if (State.tasks.length === 0) return;
+    const currentIdx = State.tasks.findIndex((t) => t.id === State.focusId);
+    const nextIdx = (currentIdx + delta + State.tasks.length) % State.tasks.length;
+    State.setFocus(State.tasks[nextIdx].id);
+    Sound.play("peek");
+    this.ensureRunning();
+  }
+
+  private selectPillIndex(index: number) {
+    if (index >= 0 && index < State.tasks.length) {
+      State.setFocus(State.tasks[index].id);
+      Sound.play("peek");
+      this.ensureRunning();
+    }
   }
 
   /**

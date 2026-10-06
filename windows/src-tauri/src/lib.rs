@@ -644,6 +644,7 @@ pub fn run() {
             hooks::ensure_hook_exe(&handle);
             pipe::start(handle.clone());
             integrations::start(handle.clone());
+            platform::spawn_global_hotkeys(handle.clone());
             Ok(())
         })
         .run(tauri::generate_context!())
