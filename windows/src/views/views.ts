@@ -534,7 +534,7 @@ export function buildViews(
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
   map.set("wardrobe", buildWardrobe(actions as WardrobeActions));
-  map.set("recap", buildWeeklyRecap((v) => actions.setView(v)));
+  map.set("recap", buildWeeklyRecap(actions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
   map.set("mail", buildPlaceholder("Sending by email isn't in this version.", ""));
   map.set("searching", buildPlaceholder("Claude is searching…", ""));

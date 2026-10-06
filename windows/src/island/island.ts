@@ -627,17 +627,38 @@ export class Island {
       State.lastActivity = performance.now();
       const ctrlOrMeta = e.ctrlKey || e.metaKey;
 
-      if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) {
-        if (State.view === "wardrobe" || State.view === "recap") {
-          this.setView("overview");
-        } else if (State.activeDiff) {
-          State.activeDiff = null;
-          State.notify();
-        } else {
-          this.collapse();
+      if (e.key === "Escape") {
+        const modals = document.querySelectorAll(".recap-share-modal");
+        if (modals.length > 0) {
+          modals.forEach((m) => m.remove());
+          e.preventDefault();
+          return;
         }
-        e.preventDefault();
-        return;
+
+        if (State.mode === "expanded") {
+          if (State.view === "recap") {
+            this.setView("overview");
+            this.collapse();
+            e.preventDefault();
+            return;
+          }
+          if (State.view === "wardrobe") {
+            this.setView("overview");
+            e.preventDefault();
+            return;
+          }
+          if (State.activeDiff) {
+            State.activeDiff = null;
+            State.notify();
+            e.preventDefault();
+            return;
+          }
+          if (!State.isPinned) {
+            this.collapse();
+            e.preventDefault();
+            return;
+          }
+        }
       }
 
       // Island-local shortcuts (Coucou 0.1.7)
