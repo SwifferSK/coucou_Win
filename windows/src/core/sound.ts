@@ -7,7 +7,7 @@ export const SOUND_NAMES = [
   "peek", "open", "close", "hover", "blip", "slap", "annoyed", "dizzy", "greet",
   "work", "finish", "error", "approval", "question", "approve", "gulp", "tick",
   "send", "love", "pop", "proud", "wink", "yawn", "attach", "think", "search",
-  "rate", "sleep",
+  "rate", "sleep", "greeting",
 ] as const;
 
 export type SoundName = (typeof SOUND_NAMES)[number];
@@ -19,6 +19,7 @@ class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private buffers = new Map<string, AudioBuffer>();
+  private activeSources = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>();
   private loading: Promise<void> | null = null;
   private idleTimer: number | null = null;
 
@@ -63,9 +64,6 @@ class SoundEngine {
    * Called when the island goes quiet. A running AudioContext keeps an audio
    * thread and its render quantum alive even with nothing playing, which shows
    * up as a steady trickle of CPU on a machine that is supposed to be idle.
-   *
-   * The delay covers the tail of whatever just played — suspending mid-sound
-   * would clip it — and `play()` resumes the context on its own.
    */
   idle() {
     if (!this.ctx || this.ctx.state !== "running" || this.idleTimer != null) return;
@@ -95,10 +93,38 @@ class SoundEngine {
       this.idleTimer = null;
     }
     if (ctx.state === "suspended") void ctx.resume();
+
+    const gain = ctx.createGain();
+    gain.gain.value = 1;
+    gain.connect(master);
+
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    src.connect(master);
+    src.connect(gain);
     src.start();
+
+    this.activeSources.set(name, { src, gain });
+    src.onended = () => {
+      if (this.activeSources.get(name)?.src === src) {
+        this.activeSources.delete(name);
+      }
+    };
+  }
+
+  fadeOut(name: SoundName | string, duration = 0.25) {
+    const active = this.activeSources.get(name);
+    if (!active || !this.ctx) return;
+    const currTime = this.ctx.currentTime;
+    active.gain.gain.setValueAtTime(active.gain.gain.value, currTime);
+    active.gain.gain.linearRampToValueAtTime(0, currTime + duration);
+    setTimeout(() => {
+      try {
+        active.src.stop();
+      } catch {
+        /* already stopped */
+      }
+      this.activeSources.delete(name);
+    }, duration * 1000);
   }
 }
 

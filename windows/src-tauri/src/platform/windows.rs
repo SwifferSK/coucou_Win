@@ -401,6 +401,15 @@ pub fn get_window_at_cursor(screen_x: i32, screen_y: i32) -> Option<WindowContex
             return None;
         }
 
+        let app_lower = app_name.to_lowercase();
+        // Ignore desktop background / explorer shell and Coucou itself
+        if app_lower == "coucou"
+            || (app_lower == "explorer"
+                && (title == "Program Manager" || title == "Desktop" || title.is_empty()))
+        {
+            return None;
+        }
+
         Some(WindowContextInfo {
             app_name,
             title,

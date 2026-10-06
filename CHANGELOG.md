@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 — October 4, 2026
+
+- **Mochi Wardrobe & Outfits**: Mochi now has 12 unlockable outfits (Party Hat, Beanie, Crown, Sunglasses, Round Glasses, Bow, Scarf, Witch Hat, Pumpkin, Santa Hat, Bunny Ears, and Seasonal Auto mode) with 3D projection, depth sorting, dynamic spring physics (squash impulses, yaw/pitch inertia, centrifugal drag), and full wardrobe selection view. Right-click Mochi or switch views to customize!
+- **Desktop Mochi**: Drag Mochi out of the island onto your desktop as an interactive companion with eye tracking, pokes, sleep mode, double-click fly-home, and notification alerts.
+- **Greeting v2**: Enhanced launch greeting animation with fall-in bounce, lateral travel, wave oscillation, streak & burst particles, and greeting sound effect with smooth fade-out.
+- **Windows parity**: Full feature parity between macOS and Windows for versions 0.1.1 through 0.1.5.
+
 ## 0.1.4 — October 3, 2026
 
 - See what Claude is editing, live: each file edit shows up in the session ticker with its +N −M lines, and a click opens the diff right in the notch (#177)

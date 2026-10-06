@@ -73,7 +73,8 @@ fn main() {
         default_exit(&arg_event);
     };
 
-    let waits_for_answer = event == "PermissionRequest";
+    let waits_for_answer = event == "PermissionRequest"
+        || (agent == "antigravity" && (event == "PreToolUse" || arg_event == "PreToolUse" || arg_event == "BeforeTool" || arg_event == "PermissionRequest"));
     let budget = if waits_for_answer { DECISION_BUDGET } else { FIRE_AND_FORGET_BUDGET };
 
     // The worker owns every blocking call. If it overruns the budget we simply
@@ -85,7 +86,7 @@ fn main() {
 
     let mut answered = false;
     if let Ok(Some(decision)) = rx.recv_timeout(budget) {
-        if let Some(json) = decision_json(&decision) {
+        if let Some(json) = decision_json(&agent, &decision) {
             let mut out = std::io::stdout();
             let _ = writeln!(out, "{json}");
             let _ = out.flush();
@@ -108,15 +109,30 @@ fn main() {
 }
 
 /// The documented PermissionRequest output.
-fn decision_json(decision: &str) -> Option<String> {
-    let behavior = match decision.trim() {
-        "allow" | "always" => r#"{"behavior":"allow"}"#.to_string(),
-        "deny" => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
-        _ => return None,
-    };
-    Some(format!(
-        r#"{{"hookSpecificOutput":{{"hookEventName":"PermissionRequest","decision":{behavior}}}}}"#
-    ))
+fn decision_json(agent: &str, decision: &str) -> Option<String> {
+    let dec = decision.trim();
+    if agent == "antigravity" {
+        match dec {
+            "allow" | "always" => Some(r#"{"decision":"allow"}"#.to_string()),
+            "deny" => Some(r#"{"decision":"deny","reason":"Denied from Coucou"}"#.to_string()),
+            _ => None,
+        }
+    } else if agent == "gemini" {
+        match dec {
+            "allow" | "always" => Some(r#"{"decision":"allow","behavior":"allow"}"#.to_string()),
+            "deny" => Some(r#"{"decision":"deny","behavior":"deny","message":"Denied from Coucou"}"#.to_string()),
+            _ => None,
+        }
+    } else {
+        let behavior = match dec {
+            "allow" | "always" => r#"{"behavior":"allow"}"#.to_string(),
+            "deny" => r#"{"behavior":"deny","message":"Denied from Coucou"}"#.to_string(),
+            _ => return None,
+        };
+        Some(format!(
+            r#"{{"hookSpecificOutput":{{"hookEventName":"PermissionRequest","decision":{behavior}}}}}"#
+        ))
+    }
 }
 
 fn normalize_event(name: &str) -> String {

@@ -1,5 +1,29 @@
 {
   "coucou": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\theas\\AppData\\Local\\Coucou\\bin\\coucou-hook.exe --agent antigravity PreToolUse",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:\\Users\\theas\\AppData\\Local\\Coucou\\bin\\coucou-hook.exe --agent antigravity PostToolUse",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreInvocation": [
       {
         "type": "command",
@@ -12,30 +36,6 @@
         "type": "command",
         "command": "C:\\Users\\theas\\AppData\\Local\\Coucou\\bin\\coucou-hook.exe --agent antigravity PostInvocation",
         "timeout": 10
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Users\\theas\\AppData\\Local\\Coucou\\bin\\coucou-hook.exe --agent antigravity BeforeTool",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "C:\\Users\\theas\\AppData\\Local\\Coucou\\bin\\coucou-hook.exe --agent antigravity AfterTool",
-            "timeout": 10
-          }
-        ]
       }
     ],
     "Stop": [

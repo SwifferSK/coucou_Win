@@ -264,15 +264,48 @@ function handleHook(island: Island, payload: HookPayload) {
     case "PreToolUse": {
       ensurePill();
       State.setFocus(agentId);
-      State.updateTask(agentId, "working");
       const tool = payload.tool_name ?? "Tool";
       const diff = extractLiveDiff(tool, payload.tool_input ?? {});
       if (diff) {
         State.activeDiff = diff;
       }
       State.appendStep(agentId, stepLabel(tool, payload.tool_input ?? {}));
-      surface("overview", false);
-      Sound.play("work");
+
+      if (payload.request_id) {
+        const requestId = payload.request_id;
+        if (pendingTimeout != null) {
+          window.clearTimeout(pendingTimeout);
+          pendingTimeout = null;
+        }
+        const input = payload.tool_input ?? {};
+        State.pendingApproval = {
+          requestId,
+          sessionId: payload.session_id ?? "",
+          tool,
+          command: approvalTarget(tool, input),
+        };
+        void Bridge.approvalAck(requestId);
+        State.updateTask(agentId, "approval");
+        State.isPinned = true;
+        Sound.play("approval");
+        island.alert("approval");
+
+        pendingTimeout = window.setTimeout(() => {
+          pendingTimeout = null;
+          if (!State.pendingApproval) return;
+          State.pendingApproval = null;
+          State.isPinned = false;
+          island.dropPin();
+          State.updateTask(agentId, "working");
+          State.setPillBadge(agentId, null);
+          if (State.view === "approval") island.setView(State.defaultView());
+          State.notify();
+        }, 110_000);
+      } else {
+        State.updateTask(agentId, "working");
+        surface("overview", false);
+        Sound.play("work");
+      }
       break;
     }
 
@@ -332,12 +365,11 @@ function handleHook(island: Island, payload: HookPayload) {
 
     case "PermissionRequest": {
       const requestId = payload.request_id ?? "";
-      if (State.pendingApproval && State.pendingApproval.requestId !== requestId) {
-        if (requestId) void Bridge.approvalDecline(requestId);
-        break;
+      if (pendingTimeout != null) {
+        window.clearTimeout(pendingTimeout);
+        pendingTimeout = null;
       }
       ensurePill();
-      if (pendingTimeout != null) window.clearTimeout(pendingTimeout);
       const tool = payload.tool_name ?? "Tool";
       const input = payload.tool_input ?? {};
       State.pendingApproval = {

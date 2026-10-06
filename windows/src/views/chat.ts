@@ -219,9 +219,17 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       Sound.play("finish");
     } catch (err) {
       State.stateOverride = null;
-      State.noteMessage = String(err).replace(/^Error:\s*/, "");
+      const msg = String(err).replace(/^Error:\s*/, "");
+      State.noteMessage = msg;
       State.view = "note";
       Sound.play("error");
+      window.setTimeout(() => {
+        if (State.view === "note") {
+          State.view = "prompt";
+          State.notify();
+          onHeightChange();
+        }
+      }, 3500);
     } finally {
       sending = false;
       State.notify();

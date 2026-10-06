@@ -12,6 +12,8 @@ import { buildPrompt } from "./chat";
 import { buildChoose, buildUpload, buildUploading } from "./upload";
 import { renderIntegrationCard, type IntegrationCardHooks } from "./integrations";
 import { buildLiveDiffWorkspace } from "./codeDiff";
+import { buildWardrobe, type WardrobeActions } from "./wardrobe";
+import type { OutfitName } from "../mochi/outfits";
 
 export interface ViewActions {
   setView(v: IslandViewName): void;
@@ -27,6 +29,8 @@ export interface ViewActions {
   setAutoClose(seconds: number): void;
   openSettingsWindow(): void;
   blip(): void;
+  selectOutfit?(outfit: OutfitName): void;
+  previewOutfit?(outfit: OutfitName | null): void;
 }
 
 export interface ViewHost {
@@ -528,6 +532,7 @@ export function buildViews(
   map.set("upload", buildUpload());
   map.set("uploading", buildUploading());
   map.set("choose", buildChoose(actions));
+  map.set("wardrobe", buildWardrobe(actions as WardrobeActions));
   // Not in the Windows v1: sending a file by email, window attach + web result.
   map.set("mail", buildPlaceholder("Sending by email isn't in this version.", ""));
   map.set("searching", buildPlaceholder("Claude is searching…", ""));

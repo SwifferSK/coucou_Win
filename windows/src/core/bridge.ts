@@ -59,6 +59,9 @@ export const Bridge = {
 
   openSettingsWindow: () => call<void>("open_settings_window"),
 
+  openDesktopMochi: (x?: number, y?: number) => call<void>("open_desktop_mochi", { x, y }),
+  closeDesktopMochi: () => call<void>("close_desktop_mochi"),
+
   /** Writes to %LOCALAPPDATA%\Coucou\coucou.log, next to the Rust lines. */
   log: (message: string) => call<void>("log_line", { message }),
 

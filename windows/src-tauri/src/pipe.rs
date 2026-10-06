@@ -39,7 +39,7 @@ const DECISION_TIMEOUT: Duration = Duration::from_secs(108);
 /// without it, an island that is paused, hidden behind a crashed webview or
 /// simply not listening would leave Claude Code staring at a prompt nobody can
 /// see for nearly two minutes.
-const ACK_TIMEOUT: Duration = Duration::from_millis(800);
+const ACK_TIMEOUT: Duration = Duration::from_millis(6000);
 const MAX_PAYLOAD: usize = 1 << 20;
 
 /// What the island can say about a permission request.
@@ -141,9 +141,31 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         .unwrap_or_default()
         .to_string();
 
-    if event != "PermissionRequest" {
-        log::line(format!("hook {event}"));
-        let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
+    let agent = payload
+        .get("coucou_agent")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+
+    let tool_name = payload
+        .get("tool_name")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+
+    // Only prompt for human permission on sensitive operations (external URLs, browser automation, questions)
+    let is_sensitive_tool = matches!(
+        tool_name.as_str(),
+        "read_url_content" | "browser_subagent" | "ask_question"
+    );
+
+    let is_permission_request = event == "PermissionRequest"
+        || (agent == "antigravity" && event == "PreToolUse" && is_sensitive_tool);
+
+    if !is_permission_request {
+        log::line(format!("hook {event} ({tool_name}) - non-blocking"));
+        let _ = app.emit_to(WINDOW_LABEL, "hook", payload.clone());
+        let _ = app.emit_to("desktop_mochi", "hook", payload);
         pipe.finish();
         return;
     }
@@ -155,14 +177,13 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
         pending.0.lock().unwrap().insert(id.clone(), tx);
     }
     payload["request_id"] = json!(id);
-    log::line(format!("hook PermissionRequest id={id}"));
-    let _ = app.emit_to(WINDOW_LABEL, "hook", payload);
+    log::line(format!("hook {event} (permission) id={id} agent={agent} tool={tool_name}"));
+    let _ = app.emit("hook", payload);
 
     let decision = wait_for_decision(&id, &mut rx).await;
     app.state::<Pending>().0.lock().unwrap().remove(&id);
 
-    // No decision: say nothing at all. coucou-hook then writes nothing to stdout
-    // and Claude Code asks in the terminal, exactly as if Coucou were closed.
+    // No decision: say nothing at all. coucou-hook then writes nothing to stdout.
     if let Some(d) = decision {
         let _ = pipe.write_all(format!("{d}\n").as_bytes()).await;
         let _ = pipe.flush().await;
@@ -170,40 +191,25 @@ async fn handle(app: AppHandle, mut pipe: impl Relay) {
     pipe.finish();
 }
 
-/// Two waits: a short one for "the card is up", then the long one for a human.
+/// Waits for human decision on screen up to DECISION_TIMEOUT.
 async fn wait_for_decision(id: &str, rx: &mut mpsc::Receiver<Reply>) -> Option<String> {
-    match tokio::time::timeout(ACK_TIMEOUT, rx.recv()).await {
-        Ok(Some(Reply::Ack)) => {}
-        // A click that beats the ack is still a click.
-        Ok(Some(Reply::Decision(d))) => {
-            log::line(format!("hook id={id} answered {d}"));
-            return Some(d);
-        }
-        Ok(Some(Reply::Decline)) => {
-            log::line(format!("hook id={id} not shown — terminal takes over"));
-            return None;
-        }
-        Ok(None) => return None,
-        Err(_) => {
-            log::line(format!("hook id={id} island never acknowledged — terminal takes over"));
-            return None;
+    while let Ok(Some(reply)) = tokio::time::timeout(DECISION_TIMEOUT, rx.recv()).await {
+        match reply {
+            Reply::Ack => {
+                log::line(format!("hook id={id} ack received"));
+            }
+            Reply::Decision(d) => {
+                log::line(format!("hook id={id} answered {d}"));
+                return Some(d);
+            }
+            Reply::Decline => {
+                log::line(format!("hook id={id} declined"));
+                return None;
+            }
         }
     }
-
-    match tokio::time::timeout(DECISION_TIMEOUT, rx.recv()).await {
-        Ok(Some(Reply::Decision(d))) => {
-            log::line(format!("hook id={id} answered {d}"));
-            Some(d)
-        }
-        Ok(Some(Reply::Decline)) => {
-            log::line(format!("hook id={id} released without a decision"));
-            None
-        }
-        _ => {
-            log::line(format!("hook id={id} timed out — terminal takes over"));
-            None
-        }
-    }
+    log::line(format!("hook id={id} timed out"));
+    None
 }
 
 fn send(app: &AppHandle, request_id: &str, reply: Reply, keep: bool) {

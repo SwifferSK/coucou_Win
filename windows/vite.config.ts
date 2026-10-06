@@ -61,6 +61,7 @@ export default defineConfig({
       input: {
         island: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
+        desktop_mochi: resolve(__dirname, "desktop_mochi.html"),
       },
     },
   },

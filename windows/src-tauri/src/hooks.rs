@@ -102,7 +102,9 @@ fn parse_settings(bytes: &[u8], path: &str) -> Result<Value, String> {
 
 #[cfg(windows)]
 fn agent_hook_command(agent: &str, event: &str) -> String {
-    let exe = settings::hook_exe_path().to_string_lossy().to_string();
+    let exe = settings::hook_exe_path()
+        .to_string_lossy()
+        .replace('\\', "/");
     let quoted_exe = if exe.contains(' ') {
         format!("\"{exe}\"")
     } else {
@@ -344,15 +346,16 @@ fn agy_merged(existing: &Value) -> Value {
     let mut root = existing.as_object().cloned().unwrap_or_default();
     let mut coucou = Map::new();
 
-    for event in ["PreToolUse", "PostToolUse"] {
+    for event in ["PreToolUse", "PostToolUse", "PermissionRequest"] {
+        let timeout = if event == "PermissionRequest" { 120 } else { 10 };
         let hook = json!({
             "type": "command",
             "command": agent_hook_command("antigravity", event),
-            "timeout": 10,
+            "timeout": timeout,
         });
         coucou.insert(event.to_string(), json!([{ "matcher": "*", "hooks": [hook] }]));
     }
-    for event in ["PreInvocation", "PostInvocation", "Stop"] {
+    for event in ["PreInvocation", "PostInvocation", "Stop", "UserPromptSubmit", "Notification"] {
         let hook = json!({
             "type": "command",
             "command": agent_hook_command("antigravity", event),
@@ -415,10 +418,12 @@ fn gemini_merged(existing: &Value) -> Value {
     let events = [
         ("SessionStart", "SessionStart", 10000),
         ("SessionEnd", "SessionEnd", 10000),
-        ("BeforeTool", "PreToolUse", 5000),
-        ("AfterTool", "PostToolUse", 5000),
-        ("BeforeAgent", "UserPromptSubmit", 5000),
-        ("AfterAgent", "Stop", 5000),
+        ("BeforeTool", "PreToolUse", 10000),
+        ("AfterTool", "PostToolUse", 10000),
+        ("PermissionRequest", "PermissionRequest", 120000),
+        ("BeforeAgent", "UserPromptSubmit", 10000),
+        ("AfterAgent", "Stop", 10000),
+        ("Notification", "Notification", 10000),
     ];
 
     for (gemini_event, normalized_event, timeout) in events {

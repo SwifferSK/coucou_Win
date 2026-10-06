@@ -58,8 +58,15 @@ impl Chat {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ChatContext {
+    #[serde(rename_all = "camelCase")]
     File { name: String, path: String },
-    Window { app_name: String, title: String, url: Option<String> },
+    #[serde(rename_all = "camelCase")]
+    Window {
+        #[serde(alias = "appName")]
+        app_name: String,
+        title: String,
+        url: Option<String>,
+    },
 }
 
 #[derive(Serialize)]

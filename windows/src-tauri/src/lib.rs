@@ -17,7 +17,7 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, LogicalPosition, Manager, Position, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
 use claude::{Chat, ChatContext, ChatReply};
@@ -440,6 +440,68 @@ fn settings_page_url(app: &AppHandle) -> WebviewUrl {
     WebviewUrl::App("settings.html".into())
 }
 
+fn desktop_mochi_page_url(app: &AppHandle) -> WebviewUrl {
+    #[cfg(dev)]
+    if let Some(mut base) = app.config().build.dev_url.clone() {
+        base.set_path("/desktop_mochi.html");
+        return WebviewUrl::External(base);
+    }
+    let _ = app;
+    WebviewUrl::App("desktop_mochi.html".into())
+}
+
+fn create_desktop_mochi_window(app: &AppHandle) {
+    let url = desktop_mochi_page_url(app);
+    match WebviewWindowBuilder::new(app, "desktop-mochi", url)
+        .additional_browser_args(BROWSER_ARGS)
+        .title("Mochi")
+        .inner_size(120.0, 120.0)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible(false)
+        .build()
+    {
+        Ok(win) => {
+            platform::make_non_activating(&win);
+            let hidden = win.clone();
+            win.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = hidden.hide();
+                }
+            });
+        }
+        Err(err) => log::line(format!("desktop mochi window failed: {err}")),
+    }
+}
+
+pub fn show_desktop_mochi_window(app: &AppHandle, x: Option<f64>, y: Option<f64>) {
+    let Some(win) = app.get_webview_window("desktop-mochi") else {
+        log::line("desktop mochi window missing");
+        return;
+    };
+    if let (Some(x), Some(y)) = (x, y) {
+        let _ = win.set_position(Position::Logical(LogicalPosition::new(x, y)));
+    }
+    let _ = win.show();
+}
+
+#[tauri::command]
+fn open_desktop_mochi(app: AppHandle, x: Option<f64>, y: Option<f64>) {
+    show_desktop_mochi_window(&app, x, y);
+}
+
+#[tauri::command]
+fn close_desktop_mochi(app: AppHandle) {
+    if let Some(win) = app.get_webview_window("desktop-mochi") {
+        let _ = win.hide();
+    }
+}
+
 /// The settings window is created hidden at launch and only ever shown and
 /// hidden afterwards. A WebView2 window created later — on the main thread or
 /// not — silently comes up blank in this app, so the window that works is the
@@ -549,6 +611,8 @@ pub fn run() {
             refresh_integration,
             open_n8n,
             open_settings_window,
+            open_desktop_mochi,
+            close_desktop_mochi,
             set_paused,
             media_control,
             get_window_at_cursor,
@@ -560,6 +624,7 @@ pub fn run() {
             tray::build(&handle)?;
             // Before the island: see create_settings_window.
             create_settings_window(&handle);
+            create_desktop_mochi_window(&handle);
 
             if let Some(win) = island::window(&handle) {
                 platform::make_non_activating(&win);

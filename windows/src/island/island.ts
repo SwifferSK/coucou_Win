@@ -3,6 +3,7 @@
 
 import { Tracked, Spring, clamp } from "../core/anim";
 import { Bridge, IS_TAURI, onDragDrop } from "../core/bridge";
+import { emit, listen } from "@tauri-apps/api/event";
 import {
   EXPANDED_CORNER, EXPANDED_W, NOTCH_W, PANEL_H, PANEL_W,
   ROUNDED_CORNER, VIEW_LAYOUTS, botGlowColor, botGlowOpacity, botPosition, chatPromptHeight,
@@ -13,6 +14,7 @@ import { Sound } from "../core/sound";
 import { State } from "../core/state";
 import { BotEngine, hexToRGB } from "../mochi/engine";
 import { Greeting } from "../mochi/greeting";
+import { getStoredOutfit } from "../mochi/outfits";
 import { createMiniBot, pruneMiniBots, syncMiniBotStates, tickMiniBots } from "../mochi/minibots";
 import { UploadCanvas } from "../upload/canvas";
 import { USC, UploadSeq } from "../upload/sequence";
@@ -150,9 +152,11 @@ export class Island {
         State.pendingApproval = null;
         State.isPinned = false;
         this.fsm.pinned = false;
-        State.updateTask("integration_claude", "working");
-        State.setPillBadge("integration_claude", null);
+        const taskId = State.focusTask?.id || "agent_antigravity";
+        State.updateTask(taskId, "working");
+        State.setPillBadge(taskId, null);
         this.setView(State.defaultView());
+        State.notify();
       },
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
@@ -174,6 +178,13 @@ export class Island {
       },
       openSettingsWindow: () => void Bridge.openSettingsWindow(),
       blip: () => Sound.play("blip"),
+      selectOutfit: (outfit) => {
+        this.engine.setOutfit(outfit, true);
+        this.engine.triggerEmote("proud");
+      },
+      previewOutfit: (outfit) => {
+        this.engine.setPreviewOutfit(outfit);
+      },
     };
 
     this.wakeStrip = h("div", { id: "wake-strip" });
@@ -541,49 +552,112 @@ export class Island {
 
     let botDragging = false;
     let botDragStart = { x: 0, y: 0 };
+    let dragMode: "compact" | "expanded" = "compact";
 
-    this.islandEl.addEventListener("mousedown", (e) => {
+    this.islandEl.addEventListener("pointerdown", (e) => {
       Sound.resume();
       State.lastActivity = performance.now();
-      if (State.mode !== "expanded") {
-        this.fsm.click();
-        return;
-      }
+      if (e.button !== 0) return;
       if (this.isBotHit(e.clientX, e.clientY)) {
         this.cancelBotHover();
         botDragging = true;
+        dragMode = State.mode === "expanded" ? "expanded" : "compact";
         botDragStart = { x: e.screenX, y: e.screenY };
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* fallback */
+        }
+      } else if (State.mode !== "expanded") {
+        this.fsm.click();
       }
     });
 
-    window.addEventListener("mouseup", (e) => {
+    this.islandEl.addEventListener("pointerup", (e) => {
+      if (e.button !== 0) return;
       if (botDragging) {
         botDragging = false;
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+          /* fallback */
+        }
         const dist = Math.hypot(e.screenX - botDragStart.x, e.screenY - botDragStart.y);
-        if (dist > 30) {
-          // Dragged onto a window! Capture window context
+        if (dist > 25) {
+          // Check if dropped onto an application window vs empty desktop
           void Bridge.getWindowAtCursor(Math.round(e.screenX), Math.round(e.screenY)).then((win) => {
             if (win && (win.appName || win.title)) {
+              // Dropped on an app window: attach context to AI Prompt
               State.promptContext = { kind: "window", appName: win.appName, title: win.title, url: win.url };
               State.droppedFile = null;
               this.setView("prompt");
               Sound.play("approve");
               this.engine.triggerEmote("happy");
               State.notify();
+            } else {
+              // Dropped onto desktop: open floating Desktop Mochi!
+              void Bridge.openDesktopMochi(e.screenX - 60, e.screenY - 60);
+              Sound.play("pop");
+              this.engine.triggerEmote("happy");
             }
           });
         } else {
-          this.engine.slap();
+          if (dragMode !== "expanded") {
+            this.fsm.click();
+          } else {
+            this.engine.slap();
+          }
+        }
+      }
+    });
+
+    this.islandEl.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      if (this.isBotHit(e.clientX, e.clientY)) {
+        if (State.view === "wardrobe" && State.mode === "expanded") {
+          this.setView("overview");
+        } else {
+          if (State.mode !== "expanded") this.fsm.click();
+          this.setView("wardrobe");
         }
       }
     });
 
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) this.collapse();
+      if (e.key === "Escape" && State.mode === "expanded" && !State.isPinned) {
+        if (State.view === "wardrobe") {
+          this.setView("overview");
+        } else {
+          this.collapse();
+        }
+      }
       State.lastActivity = performance.now();
     });
 
     void onDragDrop((e) => this.onDragDrop(e));
+
+    // Listen to Desktop Mochi events
+    const onWardrobe = () => {
+      if (State.mode !== "expanded") this.fsm.click();
+      this.setView("wardrobe");
+    };
+    const onFlyHome = () => {
+      this.engine.triggerEmote("happy");
+      Sound.play("pop");
+      if (State.mode === "hidden") this.fsm.mouseEntered();
+      this.ensureRunning();
+    };
+    const onDesktopFile = (e: { payload: { path: string } }) => {
+      if (e.payload?.path) {
+        this.swallow(e.payload.path);
+      }
+    };
+
+    window.addEventListener("desktop-mochi-wardrobe", onWardrobe);
+    window.addEventListener("desktop-mochi-fly-home", onFlyHome);
+    void listen("desktop-mochi-wardrobe", onWardrobe);
+    void listen("desktop-mochi-fly-home", onFlyHome);
+    void listen<{ path: string }>("desktop-mochi-file-dropped", onDesktopFile);
 
     // Outside Tauri (plain browser) drive the cursor from DOM events so the
     // island can be inspected with `npm run dev`.
@@ -652,8 +726,8 @@ export class Island {
     const rect = this.islandRect();
     const cx = rect.x + this.botCx.value;
     const cy = rect.y + this.botCy.value;
-    const radius = this.botSize.value / 2;
-    return (x - cx) ** 2 + (y - cy) ** 2 <= radius * radius;
+    const hitRadius = Math.max(22, this.botSize.value / 2 + 6);
+    return (x - cx) ** 2 + (y - cy) ** 2 <= hitRadius * hitRadius;
   }
 
   private botHoverIn(x: number, y: number) {
@@ -846,6 +920,26 @@ export class Island {
         this.engine.slotHVel = 0;
       }
     }
+    const isWardrobe = State.mode === "expanded" && State.view === "wardrobe";
+    const isFocusMain =
+      State.focusTask == null ||
+      State.focusTask.id === "integration_claude" ||
+      State.focusTask.isIntegration !== true;
+    const showOutfit = isFocusMain || State.mode !== "expanded" || isWardrobe;
+    this.engine.setOutfit(showOutfit ? getStoredOutfit() : "none", State.view !== "wardrobe");
+
+    const isMusicActive = Boolean(State.integrations.integration_spotify?.data?.playing);
+    const allowedStates = ["idle", "working", "thinking", "searching", "finished"];
+    const canDance = allowedStates.includes(State.effectiveState);
+    const dancing =
+      isMusicActive &&
+      canDance &&
+      (State.mode === "compact" ||
+        (State.mode === "expanded" &&
+          State.view === "overview" &&
+          State.focusTask?.id === "integration_spotify"));
+    this.engine.setDancing(dancing);
+
     this.engine.update(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, hCss);
@@ -923,6 +1017,15 @@ export class Island {
 
     syncMiniBotStates(State.tasks);
     this.engine.setState(State.effectiveState);
+
+    // Sync Desktop Mochi
+    const alertActive = Boolean(State.pendingApproval || State.view === "approval" || State.view === "question");
+    void emit("alert-state-changed", { alertActive });
+    void emit("bot-state-sync", {
+      state: State.effectiveState,
+      dancing: Boolean(State.integrations.integration_spotify?.data?.playing),
+      outfit: getStoredOutfit(),
+    });
   }
 
   /** Applies settings coming from Rust at boot. */
